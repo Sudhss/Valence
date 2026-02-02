@@ -10,6 +10,8 @@ Just a clean, desktop-first editor, and eventually a compiler, built to understa
 
 This project is **in progress** and intentionally evolving.
 
+## Tech stack 
+- C++ (Yes, that's it, plain vanilla C++, what do you think? A system engineer relies on stupid libraries, nah we make them) 
 ---
 
 ## Why Valence
