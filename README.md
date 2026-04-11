@@ -11,7 +11,7 @@
   <a href="https://valence-website.vercel.app">
     <img src="https://img.shields.io/badge/Live-Demo-0A0A0A?style=for-the-badge&logo=vercel&logoColor=white"/>
   </a>
-  <a href="https://github.com/your-repo">
+  <a href="https://github.com/Valence">
     <img src="https://img.shields.io/github/stars/your-repo?style=for-the-badge"/>
   </a>
 </p>
@@ -37,7 +37,7 @@
 ## Demo
 
 <p align="center">
-  <img src="assets/demo.mp4" width="100%"/>
+  <video src = "C:\Users\shukl\OneDrive\Documents\Projects\Valence\Assets\demo.mp4" width = "100%">
 </p>
 
 ---
