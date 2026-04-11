@@ -19,26 +19,25 @@
 ---
 
 <p align="center">
-  <img src="https://your-hero-screenshot.png" width="100%"/>
+  <img width="1879" height="884" alt="image" src="https://github.com/user-attachments/assets/71957b5d-d5b5-4517-ac7e-02622eeb1218" />
 </p>
 
 ---
 
 ## Blazing Fast. Zero Bloat.
 
-```0ms startup • ~2k LOC • 0 dependencies • 60 FPS```
-
-
 - Built entirely in C++ and Qt  
 - No Electron. No frameworks  
 - Direct control over rendering and input  
+
+<img width="1459" height="155" alt="image" src="https://github.com/user-attachments/assets/6d959a07-5862-4d70-83a1-1eecb55221ac" />
 
 ---
 
 ## Demo
 
 <p align="center">
-  <img src="https://your-demo.gif" width="100%"/>
+  <img src="assets/demo.mp4" width="100%"/>
 </p>
 
 ---
