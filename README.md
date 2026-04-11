@@ -139,8 +139,6 @@ make
 
 
 ## Author and Creater
----
-
 <p align="center">
   Built by <a href="https://github.com/Sudhss"><b>Sudhanshu Shukla</b></a>
 </p>
