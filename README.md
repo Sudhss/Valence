@@ -47,67 +47,25 @@
 Five clean subsystems. Each with a single responsibility.
 
 <p align="center">
-  <img src="https://your-architecture-image.png" width="100%"/>
+  <img width="1270" height="806" alt="image" src="https://github.com/user-attachments/assets/717f7358-c362-4150-94c5-1c84dacdfbb4" />
 </p>
-
-### Text Buffer
-- `std::vector<std::string>`
-- One string per line
-- Insert, delete, split, merge
-- O(1) line access
-
-### Cursor System
-- Logical `(row, col)` model  
-- Pixel position derived at render time  
-- No visual drift issues  
-
-### Rendering Engine
-- Custom QPainter loop  
-- Draws only visible viewport  
-- Consistent performance regardless of file size  
-
-### Input Handler
-- `keyPressEvent` driven  
-- Routes input to buffer and cursor  
-- Single repaint per event  
 
 ---
 
 ## Features
 
-- Zero-overhead rendering  
-- Logical cursor model  
-- C++ syntax highlighting  
-- File open and save  
-- Smooth vertical scrolling  
-- Line numbers (in progress)  
+<img width="1310" height="812" alt="image" src="https://github.com/user-attachments/assets/eb46d9e8-3219-46cc-94bd-d3c7d49ebbf1" />
 
 ---
 
 ## Technical Decisions
 
-Why every choice matters.
-
-- Array of lines over rope  
-  Simpler, predictable, sufficient for real-world file sizes  
-
-- Logical cursor over pixel cursor  
-  Eliminates desync bugs across fonts and scrolling  
-
-- Viewport-based rendering  
-  Constant FPS independent of file size  
+<img width="1240" height="766" alt="image" src="https://github.com/user-attachments/assets/7ca3c8b9-8f14-493c-ba19-68ec4d16b318" />
 
 ---
 
 ## Build Roadmap
-
-| Week | Focus |
-|------|------|
-| 1 | Text buffer and rendering |
-| 2 | Cursor and typing |
-| 3 | Navigation and scrolling |
-| 4 | File I/O and syntax highlighting |
-| 5 | Polish and MVP |
+<img width="1464" height="624" alt="image" src="https://github.com/user-attachments/assets/69b01f85-187c-4bc9-b964-a66bcd6ae96a" />
 
 ---
 
