@@ -87,6 +87,7 @@ make
 
 ## Philosophy
 ### Systems software should not depend on heavy abstractions.
+<img width="736" height="437" alt="image" src="https://github.com/user-attachments/assets/e8322bab-627b-45c7-b9eb-aec5ba945c56" />
 
 ## Valence focuses on:
 
@@ -94,8 +95,8 @@ make
 - Simplicity in design
 - Clear separation of responsibilities
 
+---
 
-## Author and Creater
 <p align="center">
   Built by <a href="https://github.com/Sudhss"><b>Sudhanshu Shukla</b></a>
 </p>
