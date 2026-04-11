@@ -19,26 +19,25 @@
 ---
 
 <p align="center">
-  <img src="https://your-hero-screenshot.png" width="100%"/>
+  <img width="1879" height="884" alt="image" src="https://github.com/user-attachments/assets/71957b5d-d5b5-4517-ac7e-02622eeb1218" />
 </p>
 
 ---
 
 ## Blazing Fast. Zero Bloat.
 
-```0ms startup • ~2k LOC • 0 dependencies • 60 FPS```
-
-
 - Built entirely in C++ and Qt  
 - No Electron. No frameworks  
 - Direct control over rendering and input  
+
+<img width="1459" height="155" alt="image" src="https://github.com/user-attachments/assets/6d959a07-5862-4d70-83a1-1eecb55221ac" />
 
 ---
 
 ## Demo
 
 <p align="center">
-  <img src="https://your-demo.gif" width="100%"/>
+  <img src="assets/demo.mp4" width="100%"/>
 </p>
 
 ---
@@ -48,67 +47,25 @@
 Five clean subsystems. Each with a single responsibility.
 
 <p align="center">
-  <img src="https://your-architecture-image.png" width="100%"/>
+  <img width="1270" height="806" alt="image" src="https://github.com/user-attachments/assets/717f7358-c362-4150-94c5-1c84dacdfbb4" />
 </p>
-
-### Text Buffer
-- `std::vector<std::string>`
-- One string per line
-- Insert, delete, split, merge
-- O(1) line access
-
-### Cursor System
-- Logical `(row, col)` model  
-- Pixel position derived at render time  
-- No visual drift issues  
-
-### Rendering Engine
-- Custom QPainter loop  
-- Draws only visible viewport  
-- Consistent performance regardless of file size  
-
-### Input Handler
-- `keyPressEvent` driven  
-- Routes input to buffer and cursor  
-- Single repaint per event  
 
 ---
 
 ## Features
 
-- Zero-overhead rendering  
-- Logical cursor model  
-- C++ syntax highlighting  
-- File open and save  
-- Smooth vertical scrolling  
-- Line numbers (in progress)  
+<img width="1310" height="812" alt="image" src="https://github.com/user-attachments/assets/eb46d9e8-3219-46cc-94bd-d3c7d49ebbf1" />
 
 ---
 
 ## Technical Decisions
 
-Why every choice matters.
-
-- Array of lines over rope  
-  Simpler, predictable, sufficient for real-world file sizes  
-
-- Logical cursor over pixel cursor  
-  Eliminates desync bugs across fonts and scrolling  
-
-- Viewport-based rendering  
-  Constant FPS independent of file size  
+<img width="1240" height="766" alt="image" src="https://github.com/user-attachments/assets/7ca3c8b9-8f14-493c-ba19-68ec4d16b318" />
 
 ---
 
 ## Build Roadmap
-
-| Week | Focus |
-|------|------|
-| 1 | Text buffer and rendering |
-| 2 | Cursor and typing |
-| 3 | Navigation and scrolling |
-| 4 | File I/O and syntax highlighting |
-| 5 | Polish and MVP |
+<img width="1464" height="624" alt="image" src="https://github.com/user-attachments/assets/69b01f85-187c-4bc9-b964-a66bcd6ae96a" />
 
 ---
 
@@ -130,6 +87,7 @@ make
 
 ## Philosophy
 ### Systems software should not depend on heavy abstractions.
+<img width="736" height="437" alt="image" src="https://github.com/user-attachments/assets/e8322bab-627b-45c7-b9eb-aec5ba945c56" />
 
 ## Valence focuses on:
 
@@ -137,8 +95,6 @@ make
 - Simplicity in design
 - Clear separation of responsibilities
 
-
-## Author and Creater
 ---
 
 <p align="center">
