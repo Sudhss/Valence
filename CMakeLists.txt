@@ -14,14 +14,18 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
 set(PROJECT_SOURCES
         main.cpp
-        window.cpp
-        window.h
+        main_window.cpp
+        main_window.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(LearningQT
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        text_buffer.h
+        editor_view.h
+        text_buffer.cpp
+        editor_view.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET LearningQT APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
