@@ -2,7 +2,6 @@
 <img width="347" height="177" alt="image" src="https://github.com/user-attachments/assets/845bc142-8340-4c8f-94ff-5c03bcf7f0d6" />
 </p>
 
-<h1 align="center">Valence</h1>
 <p align="center">
   <i>Write code at the speed of thought.</i>
 </p>
