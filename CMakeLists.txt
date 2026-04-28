@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(LearningQT VERSION 0.1 LANGUAGES CXX)
+project(Valence VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -13,61 +13,65 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
 set(PROJECT_SOURCES
-        main.cpp
-        main_window.cpp
-        main_window.h
+    src/main.cpp
+
+    # Core
+    src/core/text_buffer.h
+    src/core/text_buffer.cpp
+    src/core/selection.h
+    src/core/undo_manager.h
+    src/core/undo_manager.cpp
+
+    # Editor
+    src/editor/editor_widget.h
+    src/editor/editor_widget.cpp
+    src/editor/cpp_highlighter.h
+    src/editor/cpp_highlighter.cpp
+
+    # UI
+    src/ui/main_window.h
+    src/ui/main_window.cpp
+    src/ui/tab_widget.h
+    src/ui/tab_widget.cpp
+    src/ui/file_explorer.h
+    src/ui/file_explorer.cpp
+    src/ui/terminal_widget.h
+    src/ui/terminal_widget.cpp
+    src/ui/status_bar.h
+    src/ui/status_bar.cpp
+
+    # Theme
+    src/theme/theme.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(LearningQT
+    qt_add_executable(Valence
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        text_buffer.h
-        editor_view.h
-        text_buffer.cpp
-        editor_view.cpp
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET LearningQT APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 else()
-    if(ANDROID)
-        add_library(LearningQT SHARED
-            ${PROJECT_SOURCES}
-        )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
-    else()
-        add_executable(LearningQT
-            ${PROJECT_SOURCES}
-        )
-    endif()
+    add_executable(Valence
+        ${PROJECT_SOURCES}
+    )
 endif()
 
-target_link_libraries(LearningQT PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(Valence PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
-if(${QT_VERSION} VERSION_LESS 6.1.0)
-  set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.LearningQT)
-endif()
-set_target_properties(LearningQT PROPERTIES
-    ${BUNDLE_ID_OPTION}
-    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+target_include_directories(Valence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+set_target_properties(Valence PROPERTIES
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
+    OUTPUT_NAME "Valence"
 )
 
 include(GNUInstallDirs)
-install(TARGETS LearningQT
+install(TARGETS Valence
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(LearningQT)
+    qt_finalize_executable(Valence)
 endif()
