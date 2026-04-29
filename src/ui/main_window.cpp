@@ -120,50 +120,37 @@ void MainWindow::setupMenuBar() {
     fileMenu->addAction("Open File...", this, &MainWindow::openFile, QKeySequence("Ctrl+O"));
     fileMenu->addAction("Open Folder...", this, &MainWindow::openFolder, QKeySequence("Ctrl+Shift+O"));
     fileMenu->addSeparator();
-    fileMenu->addAction("Save", this, &MainWindow::saveFile, QKeySequence("Ctrl+S"));
+    // NOTE: Ctrl+S is handled by EditorWidget, which emits saveRequested()
+    auto* saveAction = fileMenu->addAction("Save", this, &MainWindow::saveFile);
+    saveAction->setShortcut(QKeySequence()); // No shortcut — editor handles Ctrl+S
     fileMenu->addAction("Save As...", this, &MainWindow::saveFileAs, QKeySequence("Ctrl+Shift+S"));
     fileMenu->addSeparator();
     fileMenu->addAction("Exit", this, &QApplication::quit, QKeySequence("Alt+F4"));
 
+    // Edit menu — NO keyboard shortcuts here!
+    // All Ctrl+Z/Y/C/X/V/A are handled directly by EditorWidget::keyPressEvent
+    // Menu items only work via mouse click
     auto* editMenu = menuBar()->addMenu("Edit");
     editMenu->addAction("Undo", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_Z, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+Z"));
+        if (auto* e = tabWidget_->currentEditor()) e->performUndo();
+    });
     editMenu->addAction("Redo", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_Y, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+Y"));
+        if (auto* e = tabWidget_->currentEditor()) e->performRedo();
+    });
     editMenu->addSeparator();
     editMenu->addAction("Cut", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_X, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+X"));
+        if (auto* e = tabWidget_->currentEditor()) e->cut();
+    });
     editMenu->addAction("Copy", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_C, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+C"));
+        if (auto* e = tabWidget_->currentEditor()) e->copy();
+    });
     editMenu->addAction("Paste", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+V"));
+        if (auto* e = tabWidget_->currentEditor()) e->paste();
+    });
     editMenu->addSeparator();
     editMenu->addAction("Select All", [this]() {
-        if (auto* e = tabWidget_->currentEditor()) {
-            QKeyEvent ev(QEvent::KeyPress, Qt::Key_A, Qt::ControlModifier);
-            QApplication::sendEvent(e, &ev);
-        }
-    }, QKeySequence("Ctrl+A"));
+        if (auto* e = tabWidget_->currentEditor()) e->selectAll();
+    });
 
     auto* viewMenu = menuBar()->addMenu("View");
     viewMenu->addAction("Toggle Terminal", this, &MainWindow::toggleTerminal, QKeySequence("Ctrl+`"));

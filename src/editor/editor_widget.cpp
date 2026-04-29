@@ -287,6 +287,22 @@ void EditorWidget::handleChar(char ch) {
     buffer_.insertChar(cursor_.row, cursor_.col, ch);
     undoManager_.recordInsert(cursor_, std::string(1, ch));
     cursor_.col++;
+
+    // Auto-close brackets and quotes
+    char closing = 0;
+    switch (ch) {
+        case '(': closing = ')'; break;
+        case '[': closing = ']'; break;
+        case '{': closing = '}'; break;
+        case '"': closing = '"'; break;
+        case '\'': closing = '\''; break;
+    }
+    if (closing) {
+        buffer_.insertChar(cursor_.row, cursor_.col, closing);
+        undoManager_.recordInsert({cursor_.row, cursor_.col}, std::string(1, closing));
+        // Cursor stays between the pair
+    }
+
     setModified(true);
     rebuildCommentState();
 }
@@ -348,19 +364,13 @@ void EditorWidget::handleDelete() {
     if (cursor_.col < buffer_.lineLength(cursor_.row)) {
         std::string ch(1, buffer_.line(cursor_.row)[cursor_.col]);
         undoManager_.recordDelete(cursor_, ch);
-        // Delete forward: remove char at cursor position
-        buffer_.line(cursor_.row); // just accessing
-        // We need a deleteForward — use a direct erase
+        // Delete forward: erase char at cursor position
         std::string& line = const_cast<std::string&>(buffer_.line(cursor_.row));
         line.erase(cursor_.col, 1);
     } else if (cursor_.row < buffer_.lineCount() - 1) {
         undoManager_.recordDelete(cursor_, "\n");
         undoManager_.forceNewGroup();
-        // Merge next line into current
-        std::string& curLine = const_cast<std::string&>(buffer_.line(cursor_.row));
-        curLine += buffer_.line(cursor_.row + 1);
-        // Remove next line
-        // We need direct access — this is a bit hacky but works for V1
+        // mergeLines(row+1) appends line[row+1] to line[row] and erases line[row+1]
         buffer_.mergeLines(cursor_.row + 1);
     }
 
@@ -398,11 +408,12 @@ void EditorWidget::handleTab() {
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
     std::string spaces = "    "; // 4 spaces
+    Position tabStart = cursor_; // Record position BEFORE inserting
     for (char c : spaces) {
         buffer_.insertChar(cursor_.row, cursor_.col, c);
         cursor_.col++;
     }
-    undoManager_.recordInsert(cursor_, spaces);
+    undoManager_.recordInsert(tabStart, spaces);
     undoManager_.forceNewGroup();
     setModified(true);
     rebuildCommentState();
@@ -458,8 +469,6 @@ void EditorWidget::performUndo() {
     for (auto& action : result.actions) {
         if (action.type == EditAction::Insert) {
             // Undo insert = delete the text
-            Position end = buffer_.insertText(action.pos.row, action.pos.col, ""); // dummy
-            // Actually: find end position and delete
             // The text was inserted at action.pos, so delete from action.pos for text.length
             Position start = action.pos;
             // Calculate end position from text
@@ -518,62 +527,62 @@ void EditorWidget::performRedo() {
 
 // ── Input Handling ──
 
+bool EditorWidget::event(QEvent* e) {
+    // Intercept Tab/Backtab before Qt uses them for focus navigation
+    if (e->type() == QEvent::KeyPress) {
+        QKeyEvent* ke = static_cast<QKeyEvent*>(e);
+        if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
+            keyPressEvent(ke);
+            return true;
+        }
+    }
+    return QWidget::event(e);
+}
+
 void EditorWidget::keyPressEvent(QKeyEvent* e) {
     bool ctrl = e->modifiers() & Qt::ControlModifier;
     bool shift = e->modifiers() & Qt::ShiftModifier;
 
-    switch (e->key()) {
-    case Qt::Key_Left:
-        if (ctrl) moveCursorWordLeft(shift);
-        else moveCursorLeft(shift);
-        break;
-    case Qt::Key_Right:
-        if (ctrl) moveCursorWordRight(shift);
-        else moveCursorRight(shift);
-        break;
-    case Qt::Key_Up:    moveCursorUp(shift); break;
-    case Qt::Key_Down:  moveCursorDown(shift); break;
-    case Qt::Key_Home:  moveCursorHome(shift, ctrl); break;
-    case Qt::Key_End:   moveCursorEnd(shift, ctrl); break;
-
-    case Qt::Key_Backspace: handleBackspace(ctrl); break;
-    case Qt::Key_Delete:    handleDelete(); break;
-    case Qt::Key_Return:
-    case Qt::Key_Enter:     handleEnter(); break;
-    case Qt::Key_Tab:       handleTab(); break;
-
-    case Qt::Key_Z:
-        if (ctrl) { if (shift) performRedo(); else performUndo(); }
-        break;
-    case Qt::Key_Y:
-        if (ctrl) performRedo();
-        break;
-    case Qt::Key_C:
-        if (ctrl) copy();
-        break;
-    case Qt::Key_X:
-        if (ctrl) cut();
-        break;
-    case Qt::Key_V:
-        if (ctrl) paste();
-        break;
-    case Qt::Key_A:
-        if (ctrl) selectAll();
-        break;
-    case Qt::Key_S:
-        if (ctrl) { emit saveRequested(); return; }
-        // Fall through to default for 's' character
-        goto handleDefault;
-
-    default:
-    handleDefault:
-        if (!e->text().isEmpty() && !ctrl) {
-            QChar ch = e->text().at(0);
-            if (ch.isPrint()) {
-                handleChar(ch.toLatin1());
-            }
+    if (ctrl) {
+        // ── Ctrl+ shortcuts ──
+        switch (e->key()) {
+        case Qt::Key_Z:     if (shift) performRedo(); else performUndo(); break;
+        case Qt::Key_Y:     performRedo(); break;
+        case Qt::Key_C:     copy(); break;
+        case Qt::Key_X:     cut(); break;
+        case Qt::Key_V:     paste(); break;
+        case Qt::Key_A:     selectAll(); break;
+        case Qt::Key_S:     emit saveRequested(); break;
+        case Qt::Key_Left:  moveCursorWordLeft(shift); break;
+        case Qt::Key_Right: moveCursorWordRight(shift); break;
+        case Qt::Key_Home:  moveCursorHome(shift, true); break;
+        case Qt::Key_End:   moveCursorEnd(shift, true); break;
+        case Qt::Key_Backspace: handleBackspace(true); break;
+        default: QWidget::keyPressEvent(e); return;
         }
-        break;
+    } else {
+        // ── Normal keys ──
+        switch (e->key()) {
+        case Qt::Key_Left:      moveCursorLeft(shift); break;
+        case Qt::Key_Right:     moveCursorRight(shift); break;
+        case Qt::Key_Up:        moveCursorUp(shift); break;
+        case Qt::Key_Down:      moveCursorDown(shift); break;
+        case Qt::Key_Home:      moveCursorHome(shift, false); break;
+        case Qt::Key_End:       moveCursorEnd(shift, false); break;
+        case Qt::Key_Backspace: handleBackspace(false); break;
+        case Qt::Key_Delete:    handleDelete(); break;
+        case Qt::Key_Return:
+        case Qt::Key_Enter:     handleEnter(); break;
+        case Qt::Key_Tab:       handleTab(); break;
+        default:
+            if (!e->text().isEmpty()) {
+                QChar ch = e->text().at(0);
+                if (ch.isPrint()) {
+                    handleChar(ch.toLatin1());
+                }
+            }
+            break;
+        }
     }
 
     ensureCursorVisible();

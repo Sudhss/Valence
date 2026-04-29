@@ -27,7 +27,7 @@ namespace Theme {
     inline const QColor SynString(165, 214, 255);        // #a5d6ff — light blue
     inline const QColor SynComment(230, 237, 243, 77);   // dim grey ~30%
     inline const QColor SynNumber(210, 168, 255);        // #d2a8ff — soft purple
-    inline const QColor SynPreprocessor(255, 166, 87);   // #ffa657 — orange
+    inline const QColor SynPreprocessor(126, 231, 135);   // #7ee787 — green (matches reference)
     inline const QColor SynFunction(126, 231, 135);      // #7ee787 — green
     inline const QColor SynPunctuation(230, 237, 243, 128); // 50%
 
