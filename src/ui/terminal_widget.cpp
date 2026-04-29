@@ -79,27 +79,27 @@ void TerminalWidget::applyStyle() {
     output_->setStyleSheet(QString(
         "QPlainTextEdit {"
         "  background: %1;"
-        "  color: #c9d1d9;"
+        "  color: %2;"
         "  border: none;"
-        "  padding: 8px 12px;"
-        "  selection-background-color: rgba(0, 255, 156, 0.15);"
+        "  padding: 10px 14px;"
+        "  selection-background-color: rgba(0, 255, 156, 0.12);"
         "}"
         "QScrollBar:vertical {"
         "  width: 4px;"
         "  background: transparent;"
         "}"
         "QScrollBar::handle:vertical {"
-        "  background: rgba(255,255,255,0.1);"
+        "  background: rgba(255,255,255,0.08);"
         "  border-radius: 2px;"
         "  min-height: 20px;"
         "}"
         "QScrollBar::handle:vertical:hover {"
-        "  background: rgba(255,255,255,0.2);"
+        "  background: rgba(255,255,255,0.15);"
         "}"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
         "  height: 0px;"
         "}"
-    ).arg(Theme::TerminalBg.name()));
+    ).arg(Theme::TerminalBg.name(), Theme::TextPrimary.name()));
 
     input_->setStyleSheet(QString(
         "QLineEdit {"
@@ -107,14 +107,19 @@ void TerminalWidget::applyStyle() {
         "  color: %2;"
         "  border: none;"
         "  border-top: 1px solid %3;"
-        "  padding: 6px 12px;"
+        "  padding: 8px 14px;"
+        "  font-size: 12px;"
+        "}"
+        "QLineEdit:focus {"
+        "  border-top: 1px solid %4;"
         "}"
         "QLineEdit::placeholder {"
-        "  color: %4;"
+        "  color: %5;"
         "}"
     ).arg(Theme::TerminalBg.name(),
           Theme::TextPrimary.name(),
           Theme::Border.name(QColor::HexArgb),
+          Theme::AccentDim.name(QColor::HexArgb),
           Theme::TextMuted.name(QColor::HexArgb)));
 
     setStyleSheet(QString("background: %1;").arg(Theme::TerminalBg.name()));

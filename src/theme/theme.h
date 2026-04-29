@@ -4,40 +4,41 @@
 #include <QString>
 
 namespace Theme {
-    // ── Background Hierarchy ──
-    inline const QColor EditorBg(11, 15, 20);            // #0b0f14 — brightest (focus)
-    inline const QColor SidebarBg(10, 13, 18);           // #0a0d12 — slightly dim
-    inline const QColor TerminalBg(7, 10, 14);           // #070a0e — most muted
-    inline const QColor TitlebarBg(13, 17, 23);          // #0d1117
-    inline const QColor PanelBg(12, 16, 24);             // #0c1018
+    // ── Background Hierarchy (softer, warmer darks — Apple-inspired) ──
+    inline const QColor EditorBg(22, 22, 28);             // #16161c — warm dark
+    inline const QColor SidebarBg(18, 18, 24);            // #121218 — slightly deeper
+    inline const QColor TerminalBg(14, 14, 20);           // #0e0e14 — deepest
+    inline const QColor TitlebarBg(24, 24, 30);           // #18181e — tab bar area
+    inline const QColor PanelBg(20, 20, 26);              // #14141a
 
     // ── Accent ──
-    inline const QColor Accent(0, 255, 156);             // #00ff9c — neon teal
-    inline const QColor AccentGlow(0, 255, 156, 77);     // 30% glow
-    inline const QColor AccentDim(0, 255, 156, 38);      // 15% subtle
+    inline const QColor Accent(0, 255, 156);              // #00ff9c — neon teal (keep this, it's the signature)
+    inline const QColor AccentGlow(0, 255, 156, 60);      // softer glow
+    inline const QColor AccentDim(0, 255, 156, 30);       // subtle hint
+    inline const QColor AccentBlue(88, 166, 255);         // #58a6ff — secondary accent
 
     // ── Text ──
-    inline const QColor TextPrimary(230, 237, 243);      // #e6edf3
-    inline const QColor TextSecondary(230, 237, 243, 153); // 60%
-    inline const QColor TextMuted(230, 237, 243, 89);    // 35%
+    inline const QColor TextPrimary(225, 228, 232);       // #e1e4e8 — slightly softer white
+    inline const QColor TextSecondary(225, 228, 232, 140); // 55%
+    inline const QColor TextMuted(225, 228, 232, 76);     // 30%
 
-    // ── Syntax ──
-    inline const QColor SynKeyword(0, 229, 255);         // #00e5ff — bright cyan
-    inline const QColor SynType(121, 192, 255);          // #79c0ff — soft blue
-    inline const QColor SynString(165, 214, 255);        // #a5d6ff — light blue
-    inline const QColor SynComment(230, 237, 243, 77);   // dim grey ~30%
-    inline const QColor SynNumber(210, 168, 255);        // #d2a8ff — soft purple
-    inline const QColor SynPreprocessor(126, 231, 135);   // #7ee787 — green (matches reference)
-    inline const QColor SynFunction(126, 231, 135);      // #7ee787 — green
-    inline const QColor SynPunctuation(230, 237, 243, 128); // 50%
+    // ── Syntax (refined for readability hierarchy) ──
+    inline const QColor SynKeyword(137, 220, 235);        // #89dceb — soft cyan (not harsh)
+    inline const QColor SynType(130, 170, 255);           // #82aaff — periwinkle blue
+    inline const QColor SynString(195, 232, 141);         // #c3e88d — soft green
+    inline const QColor SynComment(225, 228, 232, 60);    // very dim — fades out
+    inline const QColor SynNumber(255, 203, 107);         // #ffcb6b — warm amber
+    inline const QColor SynPreprocessor(199, 146, 234);   // #c792ea — soft purple
+    inline const QColor SynFunction(130, 170, 255);       // #82aaff — same as type (clean)
+    inline const QColor SynPunctuation(225, 228, 232, 100); // 40%
 
     // ── UI ──
-    inline const QColor CurrentLine(255, 255, 255, 8);   // 0.03 opacity
-    inline const QColor SelectionBg(0, 255, 156, 38);    // 0.15 opacity
-    inline const QColor Border(255, 255, 255, 15);       // ~0.06
-    inline const QColor BorderMedium(255, 255, 255, 25); // ~0.1
-    inline const QColor ScrollThumb(255, 255, 255, 25);
-    inline const QColor ScrollThumbHover(255, 255, 255, 51);
+    inline const QColor CurrentLine(255, 255, 255, 6);    // even more subtle
+    inline const QColor SelectionBg(0, 255, 156, 25);     // softer selection
+    inline const QColor Border(255, 255, 255, 10);        // very subtle borders
+    inline const QColor BorderMedium(255, 255, 255, 18);
+    inline const QColor ScrollThumb(255, 255, 255, 15);
+    inline const QColor ScrollThumbHover(255, 255, 255, 35);
 
     // ── Font Config ──
     inline const int FontSizeEditor = 13;
