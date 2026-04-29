@@ -22,15 +22,15 @@ namespace Theme {
     inline const QColor TextSecondary(225, 228, 232, 140); // 55%
     inline const QColor TextMuted(225, 228, 232, 76);     // 30%
 
-    // ── Syntax (refined for readability hierarchy) ──
-    inline const QColor SynKeyword(137, 220, 235);        // #89dceb — soft cyan (not harsh)
-    inline const QColor SynType(130, 170, 255);           // #82aaff — periwinkle blue
-    inline const QColor SynString(195, 232, 141);         // #c3e88d — soft green
-    inline const QColor SynComment(225, 228, 232, 60);    // very dim — fades out
-    inline const QColor SynNumber(255, 203, 107);         // #ffcb6b — warm amber
-    inline const QColor SynPreprocessor(199, 146, 234);   // #c792ea — soft purple
-    inline const QColor SynFunction(130, 170, 255);       // #82aaff — same as type (clean)
-    inline const QColor SynPunctuation(225, 228, 232, 100); // 40%
+    // ── Syntax (vibrant and colorful — each token type clearly distinct) ──
+    inline const QColor SynKeyword(86, 209, 255);          // #56d1ff — vivid sky blue
+    inline const QColor SynType(130, 170, 255);            // #82aaff — periwinkle
+    inline const QColor SynString(195, 232, 141);          // #c3e88d — lime green
+    inline const QColor SynComment(225, 228, 232, 60);     // very dim — fades out
+    inline const QColor SynNumber(255, 183, 77);           // #ffb74d — warm orange
+    inline const QColor SynPreprocessor(199, 146, 234);    // #c792ea — purple
+    inline const QColor SynFunction(130, 231, 135);        // #82e787 — bright green
+    inline const QColor SynPunctuation(225, 228, 232, 140); // 55% — more visible
 
     // ── UI ──
     inline const QColor CurrentLine(255, 255, 255, 6);    // even more subtle

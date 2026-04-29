@@ -25,6 +25,8 @@ private slots:
     void onEditorSaveRequested();
     void toggleTerminal();
     void toggleSidebar();
+    void runCurrentFile();
+    void buildCurrentFile();
 
 private:
     TabWidget* tabWidget_;

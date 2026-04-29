@@ -11,6 +11,10 @@ public:
     explicit TerminalWidget(QWidget* parent = nullptr);
     ~TerminalWidget();
 
+    // Send a command to the terminal programmatically
+    void runCommand(const QString& cmd);
+    void clearOutput();
+
 private slots:
     void onReadyRead();
     void onCommandEntered();

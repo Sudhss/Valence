@@ -148,3 +148,14 @@ void TerminalWidget::onCommandEntered() {
         process_->write((cmd + "\n").toLocal8Bit());
     }
 }
+
+void TerminalWidget::runCommand(const QString& cmd) {
+    if (process_->state() == QProcess::Running) {
+        output_->appendPlainText("> " + cmd);
+        process_->write((cmd + "\n").toLocal8Bit());
+    }
+}
+
+void TerminalWidget::clearOutput() {
+    output_->clear();
+}

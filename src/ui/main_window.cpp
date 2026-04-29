@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QShortcut>
 #include <QKeyEvent>
+#include <QFileInfo>
 #include <QApplication>
 
 MainWindow::MainWindow() {
@@ -169,6 +170,10 @@ void MainWindow::setupMenuBar() {
     auto* viewMenu = menuBar()->addMenu("View");
     viewMenu->addAction("Toggle Terminal", this, &MainWindow::toggleTerminal, QKeySequence("Ctrl+`"));
     viewMenu->addAction("Toggle Sidebar", this, &MainWindow::toggleSidebar, QKeySequence("Ctrl+B"));
+
+    auto* runMenu = menuBar()->addMenu("Run");
+    runMenu->addAction("▶  Build & Run", this, &MainWindow::runCurrentFile, QKeySequence("F5"));
+    runMenu->addAction("Build Only", this, &MainWindow::buildCurrentFile, QKeySequence("Ctrl+Shift+B"));
 }
 
 void MainWindow::setupShortcuts() {
@@ -347,4 +352,60 @@ void MainWindow::updateWindowTitle() {
     } else {
         setWindowTitle("Valence");
     }
+}
+
+void MainWindow::buildCurrentFile() {
+    auto* editor = tabWidget_->currentEditor();
+    if (!editor) return;
+
+    // Auto-save first
+    if (editor->filePath().isEmpty()) {
+        saveFileAs();
+        if (editor->filePath().isEmpty()) return; // User cancelled
+    } else if (editor->isModified()) {
+        editor->saveFile();
+        tabWidget_->updateTabLabel(tabWidget_->currentIndex());
+    }
+
+    QString filePath = editor->filePath();
+    QFileInfo fi(filePath);
+    QString dir = fi.absolutePath();
+    QString baseName = fi.completeBaseName();
+    QString fileName = fi.fileName();
+
+    // Show terminal
+    terminal_->setVisible(true);
+    terminal_->clearOutput();
+
+    // cd to directory and compile
+    terminal_->runCommand(QString("cd \"%1\"").arg(dir));
+    terminal_->runCommand(QString("g++ \"%1\" -o \"%2.exe\"").arg(fileName, baseName));
+}
+
+void MainWindow::runCurrentFile() {
+    auto* editor = tabWidget_->currentEditor();
+    if (!editor) return;
+
+    // Auto-save first
+    if (editor->filePath().isEmpty()) {
+        saveFileAs();
+        if (editor->filePath().isEmpty()) return;
+    } else if (editor->isModified()) {
+        editor->saveFile();
+        tabWidget_->updateTabLabel(tabWidget_->currentIndex());
+    }
+
+    QString filePath = editor->filePath();
+    QFileInfo fi(filePath);
+    QString dir = fi.absolutePath();
+    QString baseName = fi.completeBaseName();
+    QString fileName = fi.fileName();
+
+    // Show terminal
+    terminal_->setVisible(true);
+    terminal_->clearOutput();
+
+    // cd → compile → run (chained with &&)
+    terminal_->runCommand(QString("cd \"%1\"").arg(dir));
+    terminal_->runCommand(QString("g++ \"%1\" -o \"%2.exe\" ; if ($?) { .\\%2.exe }").arg(fileName, baseName));
 }
