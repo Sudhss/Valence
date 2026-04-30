@@ -5,7 +5,7 @@ project(Valence VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-
+set(APP_ICON_RESOURCE_WINDOWS app.rc)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -50,9 +50,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ${PROJECT_SOURCES}
     )
 else()
-    add_executable(Valence
-        ${PROJECT_SOURCES}
-    )
+    qt_add_executable(Valence
+    MANUAL_FINALIZATION
+    ${PROJECT_SOURCES}
+    ${APP_ICON_RESOURCE_WINDOWS}
+    
+)   
 endif()
 
 target_link_libraries(Valence PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)

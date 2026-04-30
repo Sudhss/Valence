@@ -1,0 +1,21 @@
+# ninja log v6
+1469	7790	7992780451092587	CMakeFiles/Valence.dir/src/main.cpp.obj	45651c2b39c5803b
+58	1459	7992780449659583	Valence_autogen/timestamp	3acb7df3843650db
+1517	7632	7992780451580274	CMakeFiles/Valence.dir/src/editor/editor_widget.cpp.obj	ba82432a76c3394b
+58	1459	7992780449659583	C:/Users/shukl/OneDrive/Documents/Projects/Valence/build/Desktop_Qt_6_10_2_MinGW_64_bit-Release/Valence_autogen/timestamp	3acb7df3843650db
+58	1459	7992780449659583	Valence_autogen/mocs_compilation.cpp	3acb7df3843650db
+58	1459	7992780449659583	C:/Users/shukl/OneDrive/Documents/Projects/Valence/build/Desktop_Qt_6_10_2_MinGW_64_bit-Release/Valence_autogen/mocs_compilation.cpp	3acb7df3843650db
+1504	3636	7992780451438860	CMakeFiles/Valence.dir/src/core/undo_manager.cpp.obj	6eff8f18c6e5b85a
+1549	6274	7992780451896444	CMakeFiles/Valence.dir/src/ui/tab_widget.cpp.obj	d2e7296be65e36e7
+1530	3752	7992780451701345	CMakeFiles/Valence.dir/src/editor/cpp_highlighter.cpp.obj	8382dfb01af73366
+1484	4329	7992780451256176	CMakeFiles/Valence.dir/src/core/text_buffer.cpp.obj	9a43268c813081be
+1584	6421	7992780452241949	CMakeFiles/Valence.dir/src/ui/status_bar.cpp.obj	6e0a93719ab7f7f9
+1573	7147	7992780452141432	CMakeFiles/Valence.dir/src/ui/terminal_widget.cpp.obj	87642b9d1cf9684b
+1564	7806	7992780452042014	CMakeFiles/Valence.dir/src/ui/file_explorer.cpp.obj	a6c34585eba471f6
+1461	8329	7992780451007413	CMakeFiles/Valence.dir/Valence_autogen/mocs_compilation.cpp.obj	e7ec0e021fc0f6c9
+1541	8858	7992780451815239	CMakeFiles/Valence.dir/src/ui/main_window.cpp.obj	fe9af3b04dabd0ad
+8858	9252	7992780524984418	Valence.exe	7d5e633ce729253f
+40	88	7992780248810106	CMakeFiles/clean.additional	321391b2684b2653
+88	102	7992780249295414	clean	577b940aee94fbd7
+50	112	7992794874929163	CMakeFiles/clean.additional	321391b2684b2653
+113	130	7992794875563646	clean	577b940aee94fbd7
