@@ -80,9 +80,9 @@ make
 ```
 
 ## Download
-- macOS: available
-- Windows: in progress
-- Linux: in progress
+- macOS: not sure, might do it
+- Windows: Already shipped V1.0
+- Linux: Future advancement
 
 ## Philosophy
 ### Systems software should not depend on heavy abstractions.
