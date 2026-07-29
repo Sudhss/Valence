@@ -4,6 +4,7 @@
 #include <QFileSystemModel>
 #include <QPushButton>
 #include <QLabel>
+#include <QStackedWidget>
 
 class FileExplorer : public QWidget {
     Q_OBJECT
@@ -16,6 +17,7 @@ public:
 signals:
     void fileDoubleClicked(const QString& filePath);
     void newFileRequested(const QString& dirPath);
+    void openFolderRequested();
 
 private slots:
     void onNewFile();
@@ -24,10 +26,13 @@ private slots:
     void onCollapseAll();
 
 private:
+    QStackedWidget* stack_;
     QTreeView* tree_;
     QFileSystemModel* model_;
     QLabel* projectLabel_;
+    QWidget* actionButtonsContainer_;
     QString rootPath_;
+    QString pendingOpenAfterRename_;
 
     void applyStyle();
     QString currentDirectory() const;
