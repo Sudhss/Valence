@@ -171,7 +171,11 @@ bool TerminalWidget::eventFilter(QObject* obj, QEvent* event) {
             // Extract the user's input
             cursor.setPosition(inputStartPosition_, QTextCursor::KeepAnchor);
             QString cmd = cursor.selectedText();
+            cmd.replace(QChar::ParagraphSeparator, '\n');
             cursor.clearSelection();
+            
+            // Move cursor back to the very end before inserting the newline!
+            cursor.movePosition(QTextCursor::End);
             
             // Insert newline manually and update input position
             cursor.insertText("\n");
