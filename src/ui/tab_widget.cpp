@@ -3,20 +3,36 @@
 #include <QVBoxLayout>
 
 TabWidget::TabWidget(QWidget* parent) : QWidget(parent) {
+    stack_ = new QStackedWidget(this);
+
+    // Empty state joke label
+    jokeLabel_ = new QLabel("No folder opened.\nAre you just here to admire the dark theme?", this);
+    jokeLabel_->setAlignment(Qt::AlignCenter);
+    jokeLabel_->setFont(Theme::statusFont());
+    jokeLabel_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: 500;").arg(Theme::TextMuted.name(QColor::HexArgb)));
+
     tabs_ = new QTabWidget(this);
     tabs_->setTabsClosable(true);
     tabs_->setMovable(true);
     tabs_->setDocumentMode(true);
 
+    stack_->addWidget(jokeLabel_); // Index 0: Empty state
+    stack_->addWidget(tabs_);      // Index 1: Tabs
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
-    layout->addWidget(tabs_);
+    layout->addWidget(stack_);
 
     connect(tabs_, &QTabWidget::currentChanged, this, &TabWidget::currentChanged);
     connect(tabs_, &QTabWidget::tabCloseRequested, this, &TabWidget::tabCloseRequested);
 
     applyStyle();
+    updateStackVisibility();
+}
+
+void TabWidget::updateStackVisibility() {
+    stack_->setCurrentIndex(tabs_->count() > 0 ? 1 : 0);
 }
 
 void TabWidget::applyStyle() {
@@ -72,6 +88,7 @@ void TabWidget::applyStyle() {
 int TabWidget::addEditor(EditorWidget* editor, const QString& label) {
     int idx = tabs_->addTab(editor, label);
     tabs_->setCurrentIndex(idx);
+    updateStackVisibility();
     return idx;
 }
 
@@ -107,4 +124,5 @@ void TabWidget::closeTab(int index) {
     QWidget* w = tabs_->widget(index);
     tabs_->removeTab(index);
     delete w;
+    updateStackVisibility();
 }

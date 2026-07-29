@@ -4,6 +4,9 @@
 #include <QTabBar>
 #include "../editor/editor_widget.h"
 
+#include <QStackedWidget>
+#include <QLabel>
+
 class TabWidget : public QWidget {
     Q_OBJECT
 
@@ -24,7 +27,12 @@ signals:
     void currentChanged(int index);
     void tabCloseRequested(int index);
 
+private slots:
+    void updateStackVisibility();
+
 private:
+    QStackedWidget* stack_;
     QTabWidget* tabs_;
+    QLabel* jokeLabel_;
     void applyStyle();
 };
