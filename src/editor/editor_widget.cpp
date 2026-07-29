@@ -383,20 +383,35 @@ void EditorWidget::handleEnter() {
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
     std::string indent = buffer_.getLeadingWhitespace(cursor_.row);
+    
+    // Check characters before and after cursor for smart brace expansion
+    const std::string& currentLine = buffer_.line(cursor_.row);
+    char charBefore = cursor_.col > 0 ? currentLine[cursor_.col - 1] : '\0';
+    char charAfter = cursor_.col < currentLine.length() ? currentLine[cursor_.col] : '\0';
 
-    undoManager_.recordInsert(cursor_, "\n" + indent);
-    undoManager_.forceNewGroup();
+    bool isBetweenBraces = (charBefore == '{' && charAfter == '}');
+    
+    std::string nextLineIndent = indent;
+    if (charBefore == '{') {
+        nextLineIndent += "    "; // 4 spaces
+    }
 
-    buffer_.splitLine(cursor_.row, cursor_.col);
-    cursor_.row++;
-    cursor_.col = 0;
-
-    // Auto-indent: insert leading whitespace
-    if (!indent.empty()) {
-        for (char c : indent) {
-            buffer_.insertChar(cursor_.row, cursor_.col, c);
-            cursor_.col++;
-        }
+    if (isBetweenBraces) {
+        std::string textToInsert = "\n" + nextLineIndent + "\n" + indent;
+        undoManager_.recordInsert(cursor_, textToInsert);
+        undoManager_.forceNewGroup();
+        
+        buffer_.insertText(cursor_.row, cursor_.col, textToInsert);
+        
+        // Place cursor on the newly created middle line
+        cursor_.row++;
+        cursor_.col = nextLineIndent.length();
+    } else {
+        std::string textToInsert = "\n" + nextLineIndent;
+        undoManager_.recordInsert(cursor_, textToInsert);
+        undoManager_.forceNewGroup();
+        
+        cursor_ = buffer_.insertText(cursor_.row, cursor_.col, textToInsert);
     }
 
     setModified(true);
@@ -705,9 +720,14 @@ void EditorWidget::paintCode(QPainter& p, int startRow, int endRow) {
             }
 
             p.setPen(color);
-            int x = gutterWidth_ + tok.start * charWidth_;
-            QString text = QString::fromStdString(lineStr.substr(tok.start, tok.length));
-            p.drawText(x, y + ascent_, text);
+            // Draw character by character to enforce a strict monospace grid.
+            // This prevents "ghost characters" or cursor drift if the system
+            // falls back to a proportional font or applies kerning.
+            for (int i = 0; i < tok.length; i++) {
+                int x = gutterWidth_ + (tok.start + i) * charWidth_;
+                QString ch = QString::fromStdString(lineStr.substr(tok.start + i, 1));
+                p.drawText(x, y + ascent_, ch);
+            }
         }
     }
 }
