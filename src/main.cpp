@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     app.setFont(Theme::editorFont());
 
     MainWindow window;
-    window.show();
+    window.showMaximized();
 
     return app.exec();
 }
