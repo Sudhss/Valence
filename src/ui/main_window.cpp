@@ -16,8 +16,7 @@ MainWindow::MainWindow() {
     setupShortcuts();
     updateWindowTitle();
 
-    // Start with one empty tab
-    newFile();
+    // Start with empty state
 }
 
 void MainWindow::setupUI() {
@@ -25,7 +24,6 @@ void MainWindow::setupUI() {
     resize(1280, 800);
     setMinimumSize(800, 500);
 
-    // Apply premium dark window style
     setStyleSheet(QString(
         "QMainWindow { background: %1; }"
         "QMenuBar {"
@@ -127,6 +125,7 @@ void MainWindow::setupUI() {
     connect(tabWidget_, &TabWidget::currentChanged, this, &MainWindow::onTabChanged);
     connect(tabWidget_, &TabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
     connect(fileExplorer_, &FileExplorer::fileDoubleClicked, this, &MainWindow::onFileDoubleClicked);
+    connect(fileExplorer_, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
 }
 
 void MainWindow::setupMenuBar() {
@@ -264,7 +263,8 @@ void MainWindow::saveFileAs() {
     auto* editor = tabWidget_->currentEditor();
     if (!editor) return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Save File As", QString(),
+    QString defaultDir = fileExplorer_->rootPath();
+    QString path = QFileDialog::getSaveFileName(this, "Save File As", defaultDir,
         "C++ Files (*.cpp *.h *.hpp *.cc *.cxx);;All Files (*)");
     if (path.isEmpty()) return;
 
@@ -301,7 +301,9 @@ void MainWindow::onTabCloseRequested(int index) {
 
         if (result == QMessageBox::Save) {
             if (editor->filePath().isEmpty()) {
-                QString path = QFileDialog::getSaveFileName(this, "Save File");
+                QString defaultDir = fileExplorer_->rootPath();
+                QString path = QFileDialog::getSaveFileName(this, "Save File", defaultDir,
+                    "C++ Files (*.cpp *.h *.hpp *.cc *.cxx);;All Files (*)");
                 if (path.isEmpty()) return;
                 editor->saveFileAs(path);
             } else {
