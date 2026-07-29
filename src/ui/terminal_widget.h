@@ -1,7 +1,6 @@
 #pragma once
 #include <QWidget>
 #include <QPlainTextEdit>
-#include <QLineEdit>
 #include <QProcess>
 
 class TerminalWidget : public QWidget {
@@ -15,13 +14,15 @@ public:
     void runCommand(const QString& cmd);
     void clearOutput();
 
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
 private slots:
     void onReadyRead();
-    void onCommandEntered();
 
 private:
     QPlainTextEdit* output_;
-    QLineEdit* input_;
     QProcess* process_;
+    int inputStartPosition_ = 0;
     void applyStyle();
 };
