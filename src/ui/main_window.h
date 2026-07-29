@@ -20,6 +20,7 @@ private slots:
     void onTabChanged(int index);
     void onTabCloseRequested(int index);
     void onFileDoubleClicked(const QString& path);
+    void onFileCreatedWithBoilerplate(const QString& path);
     void onCursorPositionChanged(int row, int col);
     void onModifiedChanged(bool modified);
     void onEditorSaveRequested();

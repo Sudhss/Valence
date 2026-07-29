@@ -475,6 +475,16 @@ void EditorWidget::selectAll() {
     cursor_.col = buffer_.lineLength(cursor_.row);
 }
 
+void EditorWidget::setSelection(int startRow, int startCol, int endRow, int endCol) {
+    selection_.anchor = {startRow, startCol};
+    selection_.active = true;
+    cursor_ = {endRow, endCol};
+    ensureCursorVisible();
+    resetCursorBlink();
+    emit cursorPositionChanged(cursor_.row, cursor_.col);
+    update();
+}
+
 // ── Undo / Redo ──
 
 void EditorWidget::performUndo() {

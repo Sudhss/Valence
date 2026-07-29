@@ -125,6 +125,7 @@ void MainWindow::setupUI() {
     connect(tabWidget_, &TabWidget::currentChanged, this, &MainWindow::onTabChanged);
     connect(tabWidget_, &TabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
     connect(fileExplorer_, &FileExplorer::fileDoubleClicked, this, &MainWindow::onFileDoubleClicked);
+    connect(fileExplorer_, &FileExplorer::fileCreatedWithBoilerplate, this, &MainWindow::onFileCreatedWithBoilerplate);
     connect(fileExplorer_, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
 }
 
@@ -320,6 +321,18 @@ void MainWindow::onTabCloseRequested(int index) {
 
 void MainWindow::onFileDoubleClicked(const QString& path) {
     openFilePath(path);
+}
+
+void MainWindow::onFileCreatedWithBoilerplate(const QString& path) {
+    auto* editor = tabWidget_->currentEditor();
+    if (editor && editor->filePath() == path) {
+        // Select lines 4 to 5 (0-indexed). The cursor will be at line 4, col 4.
+        // Wait, line 6 is index 5. We want to select the comment lines.
+        // Line 4: "    // I wrote the boilerplate for you."
+        // Line 5: "    // No need to thank me, just use Valence."
+        // Selection end is row 6 col 4.
+        editor->setSelection(4, 4, 6, 4);
+    }
 }
 
 void MainWindow::onCursorPositionChanged(int row, int col) {

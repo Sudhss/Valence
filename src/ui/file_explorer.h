@@ -16,6 +16,7 @@ public:
 
 signals:
     void fileDoubleClicked(const QString& filePath);
+    void fileCreatedWithBoilerplate(const QString& filePath);
     void newFileRequested(const QString& dirPath);
     void openFolderRequested();
 

@@ -104,9 +104,11 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
                         file.write(boilerplate.toUtf8());
                         file.close();
                     }
+                    emit fileDoubleClicked(fullNewPath);
+                    emit fileCreatedWithBoilerplate(fullNewPath);
+                } else {
+                    emit fileDoubleClicked(fullNewPath);
                 }
-                
-                emit fileDoubleClicked(fullNewPath);
                 pendingOpenAfterRename_.clear();
             }
         }

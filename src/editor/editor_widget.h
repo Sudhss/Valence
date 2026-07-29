@@ -40,6 +40,7 @@ public:
     void cut();
     void paste();
     void selectAll();
+    void setSelection(int startRow, int startCol, int endRow, int endCol);
 
 signals:
     void modifiedChanged(bool modified);
