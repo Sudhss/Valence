@@ -32,6 +32,17 @@ namespace Theme {
     inline const QColor SynFunction(130, 231, 135);        // #82e787 — bright green
     inline const QColor SynPunctuation(225, 228, 232, 140); // 55% — more visible
 
+    // ── Verdict / Judge states (CPH panel, diagnostics) ──
+    // Desaturated on purpose: these sit next to code all day and must not shout.
+    inline const QColor Success(126, 211, 141);           // #7ed38d — calm green (AC)
+    inline const QColor SuccessBg(126, 211, 141, 22);
+    inline const QColor Failure(240, 113, 120);           // #f07178 — soft coral (WA)
+    inline const QColor FailureBg(240, 113, 120, 22);
+    inline const QColor Warning(255, 183, 77);            // #ffb74d — amber (TLE)
+    inline const QColor WarningBg(255, 183, 77, 22);
+    inline const QColor Pending(225, 228, 232, 90);       // idle / not yet run
+    inline const QColor PendingBg(255, 255, 255, 10);
+
     // ── UI ──
     inline const QColor CurrentLine(255, 255, 255, 6);    // even more subtle
     inline const QColor SelectionBg(0, 255, 156, 25);     // softer selection
@@ -39,6 +50,16 @@ namespace Theme {
     inline const QColor BorderMedium(255, 255, 255, 18);
     inline const QColor ScrollThumb(255, 255, 255, 15);
     inline const QColor ScrollThumbHover(255, 255, 255, 35);
+
+    // ── Metrics ──
+    // One spacing scale for every widget, so panels line up without eyeballing.
+    inline const int SpaceXS = 4;
+    inline const int SpaceS  = 8;
+    inline const int SpaceM  = 12;
+    inline const int SpaceL  = 16;
+    inline const int Radius  = 6;                          // the single corner radius
+    inline const int RowHeight = 26;                       // tool buttons, list rows
+    inline const int HeaderHeight = 32;                    // panel headers
 
     // ── Font Config ──
     inline const int FontSizeEditor = 13;
