@@ -113,8 +113,24 @@ private:
     void handleBackspace(bool ctrl);
     void handleDelete();
     void handleEnter();
-    void handleTab();
+    void handleTab(bool shift);
     void handleChar(char ch);
+    void movePage(int direction, bool shift);
+
+    // ── Indentation & bracket intelligence ──
+    static constexpr int INDENT_WIDTH = 4;
+    static char closerFor(char open);
+    static bool isCloser(char c);
+    static bool isIdentLike(char c);
+
+    int indentWidthOf(const std::string& line) const;
+    bool onlyWhitespaceBefore(int row, int col) const;
+    // Walks back to the '{' this '}' closes, skipping braces that live inside
+    // strings and comments. Returns false if the block is unbalanced.
+    bool findMatchingOpenBrace(Position closePos, Position& out) const;
+    void reindentClosingBrace();
+    void indentBlock(int firstRow, int lastRow, bool unindent);
+    void adjustColAfterIndent(int row, int delta);
 
     // (clipboard & undo/redo are public — see above)
 

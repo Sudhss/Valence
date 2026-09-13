@@ -279,28 +279,186 @@ void EditorWidget::moveCursorWordRight(bool shift) {
     }
 }
 
+// ── Indentation & Bracket Intelligence ──
+
+char EditorWidget::closerFor(char open) {
+    switch (open) {
+        case '(':  return ')';
+        case '[':  return ']';
+        case '{':  return '}';
+        case '"':  return '"';
+        case '\'': return '\'';
+        default:   return 0;
+    }
+}
+
+bool EditorWidget::isCloser(char c) {
+    return c == ')' || c == ']' || c == '}' || c == '"' || c == '\'';
+}
+
+bool EditorWidget::isIdentLike(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+int EditorWidget::indentWidthOf(const std::string& line) const {
+    int width = 0;
+    for (char c : line) {
+        if (c == ' ')       width++;
+        else if (c == '\t') width += INDENT_WIDTH - (width % INDENT_WIDTH);
+        else break;
+    }
+    return width;
+}
+
+bool EditorWidget::onlyWhitespaceBefore(int row, int col) const {
+    const std::string& line = buffer_.line(row);
+    for (int i = 0; i < col && i < (int)line.size(); i++) {
+        if (line[i] != ' ' && line[i] != '\t') return false;
+    }
+    return true;
+}
+
+bool EditorWidget::findMatchingOpenBrace(Position closePos, Position& out) const {
+    int depth = 0;
+    for (int row = closePos.row; row >= 0; row--) {
+        const std::string& line = buffer_.line(row);
+
+        // Braces inside a string literal or a comment are not structure. Reuse
+        // the highlighter so this agrees with what the user actually sees.
+        bool inComment = (row < (int)blockCommentState_.size()) ? blockCommentState_[row] : false;
+        auto tokens = highlighter_.tokenize(line, inComment);
+        std::vector<bool> isCode(line.size(), false);
+        for (const auto& tok : tokens) {
+            bool code = (tok.type != TokenType::String && tok.type != TokenType::Comment);
+            for (int i = 0; i < tok.length; i++) {
+                int c = tok.start + i;
+                if (c >= 0 && c < (int)line.size()) isCode[c] = code;
+            }
+        }
+
+        int startCol = (row == closePos.row) ? closePos.col - 1 : (int)line.size() - 1;
+        for (int c = std::min(startCol, (int)line.size() - 1); c >= 0; c--) {
+            if (!isCode[c]) continue;
+            if (line[c] == '}') {
+                depth++;
+            } else if (line[c] == '{') {
+                if (depth == 0) { out = {row, c}; return true; }
+                depth--;
+            }
+        }
+    }
+    return false;
+}
+
+void EditorWidget::reindentClosingBrace() {
+    int row = cursor_.row;
+    int bracePos = cursor_.col - 1;          // cursor sits just after the '}'
+    if (bracePos < 0) return;
+    const std::string& line = buffer_.line(row);
+    if (bracePos >= (int)line.size() || line[bracePos] != '}') return;
+
+    // Only realign a brace that opens its own line. A '}' typed after code
+    // (`} else {`, `int a[] = {1};`) must be left exactly where it was typed.
+    if (!onlyWhitespaceBefore(row, bracePos)) return;
+
+    Position openPos;
+    int desired;
+    if (findMatchingOpenBrace({row, bracePos}, openPos)) {
+        desired = indentWidthOf(buffer_.line(openPos.row));
+    } else {
+        // Unbalanced source — fall back to one level shallower than we are.
+        desired = std::max(0, indentWidthOf(line) - INDENT_WIDTH);
+    }
+
+    std::string desiredWs(desired, ' ');
+    if ((int)desiredWs.size() == bracePos && line.compare(0, bracePos, desiredWs) == 0) {
+        return;                               // already correct
+    }
+
+    Position start{row, 0};
+    Position end{row, bracePos};
+    std::string removed = buffer_.getText(start, end);
+    if (!removed.empty()) {
+        undoManager_.recordDelete(start, removed);
+        buffer_.deleteRange(start, end);
+    }
+    if (!desiredWs.empty()) {
+        undoManager_.recordInsert(start, desiredWs);
+        buffer_.insertText(row, 0, desiredWs);
+    }
+    cursor_.col = desired + 1;                // immediately after the '}'
+}
+
+void EditorWidget::adjustColAfterIndent(int row, int delta) {
+    if (cursor_.row == row) cursor_.col = std::max(0, cursor_.col + delta);
+    if (selection_.active && selection_.anchor.row == row) {
+        selection_.anchor.col = std::max(0, selection_.anchor.col + delta);
+    }
+}
+
+void EditorWidget::indentBlock(int firstRow, int lastRow, bool unindent) {
+    // One undo step for the whole block, so Ctrl+Z undoes the indent the user
+    // applied rather than unpicking it a line at a time.
+    undoManager_.forceNewGroup();
+
+    for (int row = firstRow; row <= lastRow && row < buffer_.lineCount(); row++) {
+        const std::string& line = buffer_.line(row);
+
+        if (unindent) {
+            int strip = 0;
+            while (strip < INDENT_WIDTH && strip < (int)line.size() && line[strip] == ' ') strip++;
+            if (strip == 0 && !line.empty() && line[0] == '\t') strip = 1;
+            if (strip == 0) continue;
+
+            Position s{row, 0}, e{row, strip};
+            undoManager_.recordDelete(s, buffer_.getText(s, e));
+            buffer_.deleteRange(s, e);
+            adjustColAfterIndent(row, -strip);
+        } else {
+            if (line.empty()) continue;       // don't leave whitespace on blank lines
+            std::string pad(INDENT_WIDTH, ' ');
+            undoManager_.recordInsert({row, 0}, pad);
+            buffer_.insertText(row, 0, pad);
+            adjustColAfterIndent(row, INDENT_WIDTH);
+        }
+    }
+
+    undoManager_.forceNewGroup();
+}
+
 // ── Edit Operations ──
 
 void EditorWidget::handleChar(char ch) {
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
+    const std::string& line = buffer_.line(cursor_.row);
+    char nextCh = (cursor_.col < (int)line.size()) ? line[cursor_.col] : '\0';
+    char prevCh = (cursor_.col > 0) ? line[cursor_.col - 1] : '\0';
+
+    // Typing a closer that is already sitting under the cursor steps over it
+    // instead of doubling it. Without this, auto-close makes ')' unusable.
+    if (isCloser(ch) && nextCh == ch) {
+        cursor_.col++;
+        return;
+    }
+
     buffer_.insertChar(cursor_.row, cursor_.col, ch);
     undoManager_.recordInsert(cursor_, std::string(1, ch));
     cursor_.col++;
 
-    // Auto-close brackets and quotes
-    char closing = 0;
-    switch (ch) {
-        case '(': closing = ')'; break;
-        case '[': closing = ']'; break;
-        case '{': closing = '}'; break;
-        case '"': closing = '"'; break;
-        case '\'': closing = '\''; break;
-    }
-    if (closing) {
-        buffer_.insertChar(cursor_.row, cursor_.col, closing);
-        undoManager_.recordInsert({cursor_.row, cursor_.col}, std::string(1, closing));
-        // Cursor stays between the pair
+    if (ch == '}') {
+        reindentClosingBrace();
+    } else if (char closing = closerFor(ch)) {
+        // Auto-closing into the middle of a word is never what was meant, and
+        // "don't" must not become "don''t".
+        bool suppress = isIdentLike(nextCh) ||
+                        ((ch == '"' || ch == '\'') && isIdentLike(prevCh));
+        if (!suppress) {
+            buffer_.insertChar(cursor_.row, cursor_.col, closing);
+            undoManager_.recordInsert({cursor_.row, cursor_.col}, std::string(1, closing));
+            // Cursor stays between the pair
+        }
     }
 
     setModified(true);
@@ -336,7 +494,27 @@ void EditorWidget::handleBackspace(bool ctrl) {
         }
     } else {
         if (cursor_.col > 0) {
-            std::string ch(1, buffer_.line(cursor_.row)[cursor_.col - 1]);
+            const std::string& l = buffer_.line(cursor_.row);
+            char left  = l[cursor_.col - 1];
+            char right = (cursor_.col < (int)l.size()) ? l[cursor_.col] : '\0';
+
+            // Backspacing out of an empty pair the editor auto-inserted removes
+            // both halves; leaving the orphaned closer behind is the single
+            // most irritating failure mode of auto-close.
+            if (right != '\0' && closerFor(left) == right) {
+                Position start{cursor_.row, cursor_.col - 1};
+                Position end{cursor_.row, cursor_.col + 1};
+                undoManager_.recordDelete(start, buffer_.getText(start, end));
+                undoManager_.forceNewGroup();
+                buffer_.deleteRange(start, end);
+                cursor_.col--;
+                setModified(true);
+                updateGutterWidth();
+                rebuildCommentState();
+                return;
+            }
+
+            std::string ch(1, left);
             undoManager_.recordDelete({cursor_.row, cursor_.col - 1}, ch);
             buffer_.deleteChar(cursor_.row, cursor_.col);
             cursor_.col--;
@@ -383,17 +561,26 @@ void EditorWidget::handleEnter() {
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
     std::string indent = buffer_.getLeadingWhitespace(cursor_.row);
-    
-    // Check characters before and after cursor for smart brace expansion
-    const std::string& currentLine = buffer_.line(cursor_.row);
-    char charBefore = cursor_.col > 0 ? currentLine[cursor_.col - 1] : '\0';
-    char charAfter = cursor_.col < currentLine.length() ? currentLine[cursor_.col] : '\0';
 
-    bool isBetweenBraces = (charBefore == '{' && charAfter == '}');
-    
+    // Look at the last real character before the cursor, not the character
+    // immediately before it — otherwise `if (x) {` + Enter fails to indent,
+    // because auto-close has left the cursor sitting between '{' and '}'.
+    const std::string& currentLine = buffer_.line(cursor_.row);
+    char lastCode = '\0';
+    for (int i = std::min(cursor_.col, (int)currentLine.size()) - 1; i >= 0; i--) {
+        if (currentLine[i] != ' ' && currentLine[i] != '\t') { lastCode = currentLine[i]; break; }
+    }
+    char nextCode = '\0';
+    for (int i = cursor_.col; i < (int)currentLine.size(); i++) {
+        if (currentLine[i] != ' ' && currentLine[i] != '\t') { nextCode = currentLine[i]; break; }
+    }
+
+    bool opensBlock = (lastCode == '{');
+    bool isBetweenBraces = opensBlock && (nextCode == '}');
+
     std::string nextLineIndent = indent;
-    if (charBefore == '{') {
-        nextLineIndent += "    "; // 4 spaces
+    if (opensBlock) {
+        nextLineIndent += std::string(INDENT_WIDTH, ' ');
     }
 
     if (isBetweenBraces) {
@@ -419,19 +606,45 @@ void EditorWidget::handleEnter() {
     rebuildCommentState();
 }
 
-void EditorWidget::handleTab() {
-    if (selection_.hasSelection(cursor_)) deleteSelection();
+void EditorWidget::handleTab(bool shift) {
+    if (selection_.hasSelection(cursor_)) {
+        auto [start, end] = selection_.normalized(cursor_);
+        int lastRow = end.row;
+        // A selection ending at column 0 stops short of that line; indenting it
+        // would shift a line the user never highlighted.
+        if (end.col == 0 && lastRow > start.row) lastRow--;
 
-    std::string spaces = "    "; // 4 spaces
-    Position tabStart = cursor_; // Record position BEFORE inserting
-    for (char c : spaces) {
-        buffer_.insertChar(cursor_.row, cursor_.col, c);
-        cursor_.col++;
+        if (shift || lastRow > start.row) {
+            indentBlock(start.row, lastRow, shift);
+            setModified(true);
+            updateGutterWidth();
+            rebuildCommentState();
+            return;                           // selection survives, so Tab repeats
+        }
+        deleteSelection();                    // single-line selection: replace it
+    } else if (shift) {
+        indentBlock(cursor_.row, cursor_.row, true);
+        setModified(true);
+        rebuildCommentState();
+        return;
     }
+
+    std::string spaces(INDENT_WIDTH, ' ');
+    Position tabStart = cursor_;              // record position BEFORE inserting
+    buffer_.insertText(cursor_.row, cursor_.col, spaces);
+    cursor_.col += INDENT_WIDTH;
     undoManager_.recordInsert(tabStart, spaces);
     undoManager_.forceNewGroup();
     setModified(true);
     rebuildCommentState();
+}
+
+void EditorWidget::movePage(int direction, bool shift) {
+    updateSelectionForMove(shift);
+    int rows = std::max(1, height() / charHeight_ - 1);
+    cursor_.row = std::clamp(cursor_.row + direction * rows, 0, buffer_.lineCount() - 1);
+    cursor_.col = std::min(cursor_.col, buffer_.lineLength(cursor_.row));
+    scrollY_ = std::clamp(scrollY_ + direction * rows * charHeight_, 0, maxScrollY());
 }
 
 // ── Clipboard ──
@@ -598,12 +811,19 @@ void EditorWidget::keyPressEvent(QKeyEvent* e) {
         case Qt::Key_Delete:    handleDelete(); break;
         case Qt::Key_Return:
         case Qt::Key_Enter:     handleEnter(); break;
-        case Qt::Key_Tab:       handleTab(); break;
+        case Qt::Key_Tab:       handleTab(false); break;
+        case Qt::Key_Backtab:   handleTab(true); break;
+        case Qt::Key_PageUp:    movePage(-1, shift); break;
+        case Qt::Key_PageDown:  movePage(1, shift); break;
         default:
             if (!e->text().isEmpty()) {
                 QChar ch = e->text().at(0);
-                if (ch.isPrint()) {
-                    handleChar(ch.toLatin1());
+                // TextBuffer is byte-indexed and the renderer assumes one byte
+                // per column, so a non-ASCII character cannot be represented
+                // without desynchronising every column calculation. Drop it
+                // rather than inserting the NUL byte toLatin1() would produce.
+                if (ch.isPrint() && ch.unicode() < 128) {
+                    handleChar(static_cast<char>(ch.unicode()));
                 }
             }
             break;
