@@ -11,6 +11,47 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
+#include <QFileInfo>
+#include <QStandardPaths>
+#include <QProcessEnvironment>
+
+namespace {
+
+/* Resolving the shell by bare name means trusting PATH, and PATH is not
+ * something a shipped application gets to assume. powershell.exe does not live
+ * in System32 itself but in a WindowsPowerShell/v1.0 subdirectory, so any
+ * process launched with a trimmed environment — a scheduler, a service, a
+ * parent that sanitised its own PATH — starts Valence with a terminal that
+ * cannot open and no obvious reason why.
+ *
+ * So: look for the modern shell, then the classic one, then fall back to the
+ * absolute location derived from the real system root, then cmd. */
+QString resolveShell(QStringList& argsOut) {
+    const QString pwsh = QStandardPaths::findExecutable(QStringLiteral("pwsh"));
+    if (!pwsh.isEmpty()) {
+        argsOut = {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile")};
+        return pwsh;
+    }
+
+    QString ps = QStandardPaths::findExecutable(QStringLiteral("powershell"));
+    if (ps.isEmpty()) {
+        const QString root = QProcessEnvironment::systemEnvironment()
+                                 .value(QStringLiteral("SystemRoot"), QStringLiteral("C:/Windows"));
+        const QString candidate =
+            QDir(root).filePath(QStringLiteral("System32/WindowsPowerShell/v1.0/powershell.exe"));
+        if (QFileInfo::exists(candidate)) ps = candidate;
+    }
+    if (!ps.isEmpty()) {
+        argsOut = {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile")};
+        return ps;
+    }
+
+    const QString cmd = QStandardPaths::findExecutable(QStringLiteral("cmd"));
+    if (!cmd.isEmpty()) { argsOut = {}; return cmd; }
+    return QString();
+}
+
+} // namespace
 
 TerminalWidget::TerminalWidget(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
@@ -102,7 +143,9 @@ void TerminalWidget::startShell() {
         // explanation of why nothing happened.
         shellAlive_ = false;
         statusLabel_->setText(tr("· unavailable"));
-        appendOutput(tr("\nCould not start powershell.exe.\n"), Theme::Failure);
+        appendOutput(tr("\nCould not start %1.\n")
+                         .arg(QFileInfo(process_->program()).fileName()),
+                     Theme::Failure);
     });
 
     connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
@@ -114,14 +157,23 @@ void TerminalWidget::startShell() {
         markInputStart();
     });
 
+    QStringList args;
+    const QString shell = resolveShell(args);
+    if (shell.isEmpty()) {
+        shellAlive_ = false;
+        statusLabel_->setText(tr("- unavailable"));
+        appendOutput(tr("\nNo shell could be found. Looked for pwsh, powershell and cmd.\n"),
+                     Theme::Failure);
+        return;
+    }
+
     shellAlive_ = true;
     statusLabel_->clear();
     ansiPending_.clear();
     if (!workingDir_.isEmpty() && QDir(workingDir_).exists()) {
         process_->setWorkingDirectory(workingDir_);
     }
-    process_->start(QStringLiteral("powershell.exe"),
-                    {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile")});
+    process_->start(shell, args);
 }
 
 void TerminalWidget::setWorkingDirectory(const QString& dir) {

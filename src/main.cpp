@@ -55,7 +55,7 @@ static QString dialogStyle() {
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("Valence");
-    app.setApplicationVersion("1.0.0");
+    app.setApplicationVersion("3.0.0");
     app.setOrganizationName("Valence");
 
     // Set default font

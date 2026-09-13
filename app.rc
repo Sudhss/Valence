@@ -1,1 +1,36 @@
+#include <windows.h>
+
 IDI_ICON1 ICON "Assets/favicon.ico"
+
+// Without this block the shipped binary has empty File/Product version fields
+// in its properties dialog. It looks unfinished, it makes support questions
+// ("which build are you on?") unanswerable, and an unsigned executable carrying
+// no metadata at all draws more attention from SmartScreen than one that does.
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     3,0,0,0
+PRODUCTVERSION  3,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"                        // US English, Unicode
+        BEGIN
+            VALUE "CompanyName",      "Sudhanshu Shukla"
+            VALUE "FileDescription",  "Valence - a code editor built from scratch in C++ and Qt"
+            VALUE "FileVersion",      "3.0.0.0"
+            VALUE "InternalName",     "Valence"
+            VALUE "LegalCopyright",   "Copyright (C) Sudhanshu Shukla"
+            VALUE "OriginalFilename", "Valence.exe"
+            VALUE "ProductName",      "Valence"
+            VALUE "ProductVersion",   "3.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

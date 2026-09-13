@@ -116,9 +116,33 @@ cmake --build build
 
 The build defaults to `Release`; pass `-DCMAKE_BUILD_TYPE=Debug` if you want symbols.
 
+### Packaging a release
+
+Needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) and Qt's `windeployqt`.
+
+```bash
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/mingw_64
+cmake --build build-release
+
+mkdir -p dist/Valence-3.0 && cp build-release/Valence.exe dist/Valence-3.0/
+windeployqt --release --no-translations --compiler-runtime --dir dist/Valence-3.0 dist/Valence-3.0/Valence.exe
+
+ISCC ValenceV3.iss
+```
+
+The installer lands in `Output/`. `ValenceV3.iss` stages from `dist/` rather than
+straight out of the build tree — the V2 script shipped `CMakeCache.txt`,
+`CMakeFiles/` and `build.ninja` to every user who installed it.
+
+Before publishing, check the staged build runs on a machine without Qt:
+
+```bash
+cd dist/Valence-3.0 && ./Valence.exe
+```
+
 ## Download
 - macOS: not sure, might do it
-- Windows: Already shipped V1.0
+- Windows: Shipped — v3.0
 - Linux: Future advancement
 
 ## Philosophy

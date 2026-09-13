@@ -2,6 +2,7 @@
 build/
 build-*/
 Output/
+dist/
 *.exe
 *.obj
 *.o
