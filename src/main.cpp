@@ -41,9 +41,9 @@ static QString dialogStyle() {
         "  selection-background-color: %9;"
         "}"
         "QLineEdit:focus { border: 1px solid %7; }"
-    ).arg(Theme::PanelBg.name(),                       // %1
+    ).arg(Theme::Overlay.name(),                       // %1
           Theme::TextSecondary.name(QColor::HexArgb),  // %2
-          Theme::TitlebarBg.name(),                    // %3
+          Theme::Raised.name(),                        // %3
           Theme::BorderMedium.name(QColor::HexArgb),   // %4
           QString::number(Theme::Radius),              // %5
           Theme::TextPrimary.name(),                   // %6

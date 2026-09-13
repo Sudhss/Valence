@@ -5,53 +5,99 @@
 #include <QStringList>
 
 namespace Theme {
-    // ── Background Hierarchy (softer, warmer darks — Apple-inspired) ──
-    inline const QColor EditorBg(22, 22, 28);             // #16161c — warm dark
-    inline const QColor SidebarBg(18, 18, 24);            // #121218 — slightly deeper
-    inline const QColor TerminalBg(14, 14, 20);           // #0e0e14 — deepest
-    inline const QColor TitlebarBg(24, 24, 30);           // #18181e — tab bar area
-    inline const QColor PanelBg(20, 20, 26);              // #14141a
+    // ── Elevation ────────────────────────────────────────────────────────
+    //
+    // A dark interface reads as flat plastic when every surface sits within a
+    // few points of every other one, which is exactly what this palette used to
+    // do: five "different" backgrounds spanning ten RGB values, butted together
+    // with identical hairlines. Depth in a dark UI comes from a deliberate
+    // ramp — the further forward a surface is, the lighter it sits — plus a
+    // highlight along the top edge of raised surfaces, as if lit from above.
+    //
+    // The neutrals carry a slight blue-violet cast rather than being pure grey;
+    // a perfectly neutral dark reads as cheap, and the tint gives the teal
+    // accent something to sit against.
+    inline const QColor Base    ( 11,  12,  16);   // #0b0c10 app floor, terminal
+    inline const QColor Chrome  ( 16,  18,  24);   // #101218 sidebar, status, tab strip
+    inline const QColor Surface ( 21,  23,  29);   // #15171d the editor itself
+    inline const QColor Raised  ( 27,  30,  38);   // #1b1e26 cards, active tab, panels
+    inline const QColor Overlay ( 34,  38,  47);   // #22262f menus, popups — floats above all
+
+    // Existing names, remapped onto the ramp so every call site moves at once.
+    inline const QColor EditorBg   = Surface;
+    inline const QColor SidebarBg  = Chrome;
+    inline const QColor TerminalBg = Base;
+    inline const QColor TitlebarBg = Chrome;
+    inline const QColor PanelBg    = Chrome;
 
     // ── Accent ──
-    inline const QColor Accent(0, 255, 156);              // #00ff9c — neon teal (keep this, it's the signature)
-    inline const QColor AccentGlow(0, 255, 156, 60);      // softer glow
-    inline const QColor AccentDim(0, 255, 156, 30);       // subtle hint
-    inline const QColor AccentBlue(88, 166, 255);         // #58a6ff — secondary accent
-    inline const QColor OnAccent(10, 12, 14);              // text/icons drawn ON the accent
+    //
+    // The signature was #00ff9c: fully saturated, red channel at zero. Neon on
+    // near-black is the house style of terminal-hacker themes, and it is the
+    // loudest thing in the interface by a wide margin. This is the same teal,
+    // pulled back from fluorescent to something with a bit of depth — still
+    // unmistakably the brand, no longer shouting.
+    //
+    // To restore the original exactly, set Accent = AccentNeon.
+    inline const QColor AccentNeon(  0, 255, 156);         // #00ff9c — the original
+    inline const QColor Accent    ( 47, 224, 160);         // #2fe0a0
+    inline const QColor AccentHot ( 92, 240, 186);         // #5cf0ba — hover / focus
+    inline const QColor AccentGlow( 47, 224, 160,  64);
+    inline const QColor AccentDim ( 47, 224, 160,  30);
+    inline const QColor AccentWash( 47, 224, 160,  18);    // large fills only
+    inline const QColor AccentBlue( 96, 165, 250);         // #60a5fa — secondary
+    inline const QColor OnAccent  (  8,  14,  12);         // text drawn ON the accent
 
     // ── Text ──
-    inline const QColor TextPrimary(225, 228, 232);       // #e1e4e8 — slightly softer white
-    inline const QColor TextSecondary(225, 228, 232, 140); // 55%
-    inline const QColor TextMuted(225, 228, 232, 76);     // 30%
+    // Four steps, not three: headings, body, labels, and the things that should
+    // barely register until you look for them.
+    inline const QColor TextPrimary  (233, 236, 241);      // #e9ecf1
+    inline const QColor TextSecondary(233, 236, 241, 160);
+    inline const QColor TextMuted    (233, 236, 241, 102);
+    inline const QColor TextFaint    (233, 236, 241,  58);
 
-    // ── Syntax (vibrant and colorful — each token type clearly distinct) ──
+    // ── Syntax ──
     inline const QColor SynKeyword(86, 209, 255);          // #56d1ff — vivid sky blue
     inline const QColor SynType(130, 170, 255);            // #82aaff — periwinkle
     inline const QColor SynString(195, 232, 141);          // #c3e88d — lime green
-    inline const QColor SynComment(225, 228, 232, 96);     // recedes, but stays readable
+    inline const QColor SynComment(233, 236, 241, 96);     // recedes, but stays readable
     inline const QColor SynNumber(255, 183, 77);           // #ffb74d — warm orange
     inline const QColor SynPreprocessor(199, 146, 234);    // #c792ea — purple
     inline const QColor SynFunction(130, 231, 135);        // #82e787 — bright green
-    inline const QColor SynPunctuation(225, 228, 232, 165); // brackets should not disappear
+    inline const QColor SynPunctuation(233, 236, 241, 165); // brackets should not disappear
 
     // ── Verdict / Judge states (CPH panel, diagnostics) ──
     // Desaturated on purpose: these sit next to code all day and must not shout.
     inline const QColor Success(126, 211, 141);           // #7ed38d — calm green (AC)
-    inline const QColor SuccessBg(126, 211, 141, 22);
+    inline const QColor SuccessBg(126, 211, 141, 26);
     inline const QColor Failure(240, 113, 120);           // #f07178 — soft coral (WA)
-    inline const QColor FailureBg(240, 113, 120, 22);
+    inline const QColor FailureBg(240, 113, 120, 26);
     inline const QColor Warning(255, 183, 77);            // #ffb74d — amber (TLE)
-    inline const QColor WarningBg(255, 183, 77, 22);
-    inline const QColor Pending(225, 228, 232, 90);       // idle / not yet run
-    inline const QColor PendingBg(255, 255, 255, 10);
+    inline const QColor WarningBg(255, 183, 77, 26);
+    inline const QColor Pending(233, 236, 241, 90);       // idle / not yet run
+    inline const QColor PendingBg(255, 255, 255, 12);
+
+    // ── Edges & light ──
+    //
+    // A single flat hairline everywhere is what makes panels look stuck onto
+    // each other. Real edges have direction: a raised surface catches light on
+    // its top edge and casts a darker line at the bottom.
+    inline const QColor Border       (255, 255, 255,  16);  // divider between panes
+    inline const QColor BorderMedium (255, 255, 255,  26);  // control outlines
+    inline const QColor BorderStrong (255, 255, 255,  38);  // focused control
+    inline const QColor HighlightTop (255, 255, 255,  20);  // top edge of a raised surface
+    inline const QColor ShadowSoft   (  0,   0,   0,  70);  // under floating things
+    inline const QColor ShadowDeep   (  0,   0,   0, 120);
+
+    // Hover and selection as tokens, so every widget reacts by the same amount.
+    inline const QColor HoverWash    (255, 255, 255,  13);
+    inline const QColor ActiveWash   (255, 255, 255,  22);
 
     // ── UI ──
     inline const QColor CurrentLine(255, 255, 255, 11);   // present, still quiet
-    inline const QColor SelectionBg(0, 255, 156, 34);     // softer selection
-    inline const QColor Border(255, 255, 255, 10);        // very subtle borders
-    inline const QColor BorderMedium(255, 255, 255, 18);
-    inline const QColor ScrollThumb(255, 255, 255, 15);
-    inline const QColor ScrollThumbHover(255, 255, 255, 35);
+    inline const QColor SelectionBg(47, 224, 160, 40);
+    inline const QColor ScrollThumb(255, 255, 255, 26);
+    inline const QColor ScrollThumbHover(255, 255, 255, 52);
 
     // ── Metrics ──
     // One spacing scale for every widget, so panels line up without eyeballing.
@@ -59,9 +105,17 @@ namespace Theme {
     inline const int SpaceS  = 8;
     inline const int SpaceM  = 12;
     inline const int SpaceL  = 16;
-    inline const int Radius  = 6;                          // the single corner radius
-    inline const int RowHeight = 26;                       // tool buttons, list rows
-    inline const int HeaderHeight = 32;                    // panel headers
+    inline const int Radius      = 6;                      // buttons, badges, inputs
+    inline const int RadiusPanel = 9;                      // cards, popups, menus
+    inline const int RowHeight   = 28;                      // tool buttons, list rows
+    inline const int HeaderHeight = 36;                     // panel headers
+
+    // A vertical gradient across a chrome surface is the cheapest convincing
+    // depth cue there is, and Qt stylesheets support it directly.
+    inline QString chromeGradient(const QColor& top, const QColor& bottom) {
+        return QString("qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2)")
+            .arg(top.name(), bottom.name());
+    }
 
     // ── Type ───────────────────────────────────────────────────────────────
     //

@@ -12,10 +12,18 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QSettings>
+#include <QTimer>
+#include <QActionGroup>
+#include <QStandardPaths>
+#include <QDir>
 #include <algorithm>
 #include <QHash>
 
 MainWindow::MainWindow() {
+    autoSaveTimer_ = new QTimer(this);
+    autoSaveTimer_->setSingleShot(true);
+    connect(autoSaveTimer_, &QTimer::timeout, this, &MainWindow::autoSaveTick);
+
     setupUI();
     setupMenuBar();
     setupShortcuts();
@@ -38,6 +46,8 @@ void MainWindow::saveLayout() const {
     s.setValue(QStringLiteral("terminalVisible"), terminal_->isVisible());
     s.setValue(QStringLiteral("sidebarVisible"), fileExplorer_->isVisible());
     s.setValue(QStringLiteral("lastFolder"), fileExplorer_->rootPath());
+    s.setValue(QStringLiteral("editorFontPx"), editorFontPx_);
+    s.setValue(QStringLiteral("autoSave"), autoSaveEnabled_);
     s.endGroup();
 }
 
@@ -68,11 +78,20 @@ void MainWindow::restoreLayout() {
 
     // Reopening where you left off is most of what "resume work" means for a
     // contest folder. Only if it still exists.
+    applyZoom(s.value(QStringLiteral("editorFontPx"), Theme::FontSizeEditor).toInt());
+    statusBar_->setMessage(QString());     // don't greet the user with a zoom toast
+
+    autoSaveEnabled_ = s.value(QStringLiteral("autoSave"), true).toBool();
+    if (autoSaveAction_) autoSaveAction_->setChecked(autoSaveEnabled_);
+
     const QString folder = s.value(QStringLiteral("lastFolder")).toString();
-    if (!folder.isEmpty() && QFileInfo(folder).isDir()) {
-        fileExplorer_->setRootPath(folder);
-    }
     s.endGroup();
+
+    // Reopening where you left off is most of what resuming work means; falling
+    // back to the configured workspace means the app never starts pointed at
+    // some arbitrary directory.
+    openWorkspace((!folder.isEmpty() && QFileInfo(folder).isDir()) ? folder
+                                                                   : defaultWorkspace());
 }
 
 void MainWindow::setupUI() {
@@ -96,13 +115,14 @@ void MainWindow::setupUI() {
         "  margin: 1px 2px;"
         "}"
         "QMenuBar::item:selected {"
-        "  background: rgba(255, 255, 255, 0.06);"
+        "  background: %7;"
+        "  color: %8;"
         "}"
         "QMenu {"
-        "  background: %2;"
+        "  background: %5;"
         "  color: %3;"
         "  border: 1px solid %4;"
-        "  border-radius: 8px;"
+        "  border-radius: %6px;"
         "  font-size: 13px;"
         "  padding: 6px 0;"
         "}"
@@ -112,7 +132,8 @@ void MainWindow::setupUI() {
         "  margin: 1px 6px;"
         "}"
         "QMenu::item:selected {"
-        "  background: rgba(255, 255, 255, 0.06);"
+        "  background: %7;"
+        "  color: %8;"
         "}"
         "QMenu::separator {"
         "  height: 1px;"
@@ -126,17 +147,21 @@ void MainWindow::setupUI() {
         "}"
         // Tooltip styling
         "QToolTip {"
-        "  background: %2;"
+        "  background: %5;"
         "  color: %3;"
         "  border: 1px solid %4;"
         "  border-radius: 4px;"
         "  padding: 4px 8px;"
         "  font-size: 12px;"
         "}"
-    ).arg(Theme::EditorBg.name(),
-          Theme::TitlebarBg.name(),
-          Theme::TextSecondary.name(QColor::HexArgb),
-          Theme::Border.name(QColor::HexArgb)));
+    ).arg(Theme::Base.name(),                             // %1 window floor
+          Theme::Chrome.name(),                           // %2 menu bar
+          Theme::TextSecondary.name(QColor::HexArgb),     // %3
+          Theme::Border.name(QColor::HexArgb),            // %4
+          Theme::Overlay.name(),                          // %5 floating surfaces
+          QString::number(Theme::RadiusPanel),            // %6
+          Theme::ActiveWash.name(QColor::HexArgb),        // %7 highlight
+          Theme::TextPrimary.name()));                    // %8
 
     // ── Layout ──
     // Sidebar | (Editor Tabs / Terminal)
@@ -214,6 +239,7 @@ void MainWindow::setupMenuBar() {
     fileMenu->addAction("New File", QKeySequence("Ctrl+N"), this, &MainWindow::newFile);
     fileMenu->addAction("Open File...", QKeySequence("Ctrl+O"), this, &MainWindow::openFile);
     fileMenu->addAction("Open Folder...", QKeySequence("Ctrl+Shift+O"), this, &MainWindow::openFolder);
+    fileMenu->addAction("Set Default Folder...", this, &MainWindow::chooseDefaultWorkspace);
     fileMenu->addSeparator();
     // NOTE: Ctrl+S is handled by EditorWidget, which emits saveRequested()
     auto* saveAction = fileMenu->addAction("Save", this, &MainWindow::saveFile);
@@ -251,6 +277,26 @@ void MainWindow::setupMenuBar() {
     viewMenu->addAction("Toggle Terminal", QKeySequence("Ctrl+`"), this, &MainWindow::toggleTerminal);
     viewMenu->addAction("Toggle Sidebar", QKeySequence("Ctrl+B"), this, &MainWindow::toggleSidebar);
     viewMenu->addAction("Toggle Judge Panel", QKeySequence("Ctrl+J"), this, &MainWindow::toggleJudgePanel);
+    viewMenu->addSeparator();
+
+    // Ctrl+= is what the unshifted "+" key actually sends; Ctrl++ and the
+    // keypad plus are registered too so every way of pressing it works.
+    auto* zoomInAct = viewMenu->addAction("Zoom In", this, &MainWindow::zoomIn);
+    zoomInAct->setShortcuts({QKeySequence("Ctrl+="), QKeySequence("Ctrl++"),
+                             QKeySequence(Qt::CTRL | Qt::Key_Plus)});
+    auto* zoomOutAct = viewMenu->addAction("Zoom Out", this, &MainWindow::zoomOut);
+    zoomOutAct->setShortcuts({QKeySequence("Ctrl+-"),
+                              QKeySequence(Qt::CTRL | Qt::Key_Minus)});
+    viewMenu->addAction("Reset Zoom", QKeySequence("Ctrl+0"), this, &MainWindow::zoomReset);
+    viewMenu->addSeparator();
+
+    autoSaveAction_ = viewMenu->addAction("Auto Save");
+    autoSaveAction_->setCheckable(true);
+    autoSaveAction_->setChecked(autoSaveEnabled_);
+    connect(autoSaveAction_, &QAction::toggled, this, [this](bool on) {
+        autoSaveEnabled_ = on;
+        if (on) scheduleAutoSave(); else autoSaveTimer_->stop();
+    });
 
     auto* runMenu = menuBar()->addMenu("Run");
     runMenu->addAction("Run Test Cases", QKeySequence("Ctrl+Shift+J"), this, [this]() {
@@ -286,6 +332,12 @@ void MainWindow::connectEditor(EditorWidget* editor) {
             this, &MainWindow::onModifiedChanged);
     connect(editor, &EditorWidget::saveRequested,
             this, &MainWindow::onEditorSaveRequested);
+    connect(editor, &EditorWidget::zoomStepRequested, this, [this](int steps) {
+        applyZoom(editorFontPx_ + steps);
+    });
+
+    // A new tab adopts the current zoom rather than reverting to the default.
+    editor->setFontPixelSize(editorFontPx_);
 }
 
 // ── Slots ──
@@ -304,10 +356,8 @@ void MainWindow::openFile() {
 }
 
 void MainWindow::openFolder() {
-    QString path = QFileDialog::getExistingDirectory(this, "Open Folder");
-    if (!path.isEmpty()) {
-        fileExplorer_->setRootPath(path);
-    }
+    QString path = QFileDialog::getExistingDirectory(this, "Open Folder", defaultWorkspace());
+    if (!path.isEmpty()) openWorkspace(path);
 }
 
 void MainWindow::openFilePath(const QString& path) {
@@ -451,10 +501,11 @@ void MainWindow::onCursorPositionChanged(int row, int col) {
     statusBar_->setCursorPosition(row, col);
 }
 
-void MainWindow::onModifiedChanged(bool) {
+void MainWindow::onModifiedChanged(bool modified) {
     int idx = tabWidget_->currentIndex();
     if (idx >= 0) tabWidget_->updateTabLabel(idx);
     updateWindowTitle();
+    if (modified) scheduleAutoSave();
 }
 
 void MainWindow::onEditorSaveRequested() {
@@ -496,6 +547,84 @@ void MainWindow::toggleJudgePanel() {
     }
 }
 
+QString MainWindow::defaultWorkspace() const {
+    QSettings s;
+    const QString configured = s.value(QStringLiteral("workspace/defaultFolder")).toString();
+    if (!configured.isEmpty() && QDir(configured).exists()) return configured;
+
+    // Portable fallback: a Valence folder under the user's Documents. Never a
+    // hardcoded absolute path — this source is public, and one person's home
+    // directory is meaningless on anyone else's machine.
+    const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (docs.isEmpty()) return QString();
+    const QString fallback = docs + QStringLiteral("/Valence");
+    QDir().mkpath(fallback);
+    return fallback;
+}
+
+void MainWindow::setDefaultWorkspace(const QString& path) {
+    if (path.isEmpty() || !QDir(path).exists()) return;
+    QSettings s;
+    s.setValue(QStringLiteral("workspace/defaultFolder"), path);
+}
+
+void MainWindow::openWorkspace(const QString& path) {
+    if (path.isEmpty() || !QDir(path).exists()) return;
+    fileExplorer_->setRootPath(path);
+    // The prompt follows the project. Without this the shell sat in whatever
+    // directory the process was launched from.
+    terminal_->setWorkingDirectory(path);
+}
+
+void MainWindow::chooseDefaultWorkspace() {
+    const QString path = QFileDialog::getExistingDirectory(
+        this, tr("Choose the folder Valence opens by default"), defaultWorkspace());
+    if (path.isEmpty()) return;
+    setDefaultWorkspace(path);
+    openWorkspace(path);
+    statusBar_->setMessage(tr("Default folder set"));
+}
+
+void MainWindow::applyZoom(int px) {
+    editorFontPx_ = std::clamp(px, EditorWidget::MinFontPx, EditorWidget::MaxFontPx);
+    for (int i = 0; i < tabWidget_->count(); i++) {
+        if (auto* editor = tabWidget_->editorAt(i)) editor->setFontPixelSize(editorFontPx_);
+    }
+    statusBar_->setMessage(tr("Zoom %1%")
+        .arg(qRound(100.0 * editorFontPx_ / Theme::FontSizeEditor)));
+}
+
+void MainWindow::zoomIn()    { applyZoom(editorFontPx_ + 1); }
+void MainWindow::zoomOut()   { applyZoom(editorFontPx_ - 1); }
+void MainWindow::zoomReset() { applyZoom(Theme::FontSizeEditor); }
+
+void MainWindow::scheduleAutoSave() {
+    if (!autoSaveEnabled_) return;
+    // Restart on every edit, so a file is written once the user pauses rather
+    // than on every keystroke.
+    autoSaveTimer_->start(1200);
+}
+
+void MainWindow::autoSaveTick() {
+    saveDirtyBuffers();
+}
+
+void MainWindow::saveDirtyBuffers() {
+    if (!autoSaveEnabled_) return;
+    bool wrote = false;
+    for (int i = 0; i < tabWidget_->count(); i++) {
+        auto* editor = tabWidget_->editorAt(i);
+        // An untitled buffer has nowhere to go, and silently opening a Save As
+        // dialog on a timer would be hostile. Those still need Ctrl+S.
+        if (!editor || !editor->isModified() || editor->filePath().isEmpty()) continue;
+        if (editor->saveFile()) {
+            tabWidget_->updateTabLabel(i);
+            wrote = true;
+        }
+    }
+    if (wrote) updateWindowTitle();
+}
+
 void MainWindow::syncJudgeTarget() {
     auto* editor = tabWidget_->currentEditor();
     cphPanel_->setTargetFile(editor ? editor->filePath() : QString());
@@ -521,6 +650,13 @@ void MainWindow::syncJudgeTarget() {
 
 // Returns false if the user cancelled — the caller must then abort whatever it
 // was doing (closing a tab, quitting the app).
+bool MainWindow::event(QEvent* e) {
+    // Alt-tabbing away is a natural save point, and matches what editors with
+    // auto-save do. The timer alone would leave up to a second unwritten.
+    if (e->type() == QEvent::WindowDeactivate) saveDirtyBuffers();
+    return QMainWindow::event(e);
+}
+
 bool MainWindow::confirmDiscardChanges() {
     for (int i = tabWidget_->count() - 1; i >= 0; --i) {
         auto* editor = tabWidget_->editorAt(i);
@@ -554,6 +690,7 @@ void MainWindow::closeEvent(QCloseEvent* e) {
         e->ignore();
         return;
     }
+    saveDirtyBuffers();
     cphPanel_->persist();   // don't lose the user's test cases on exit
     saveLayout();
     e->accept();

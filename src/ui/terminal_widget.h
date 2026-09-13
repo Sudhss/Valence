@@ -21,6 +21,13 @@ public:
     void runCommand(const QString& cmd);
     void clearOutput();
 
+    // Where the shell starts, and where it is moved to when the open folder
+    // changes. Without this the shell inherits whatever directory the
+    // application process happened to be launched from, which is never what
+    // the user wants to see in a prompt.
+    void setWorkingDirectory(const QString& dir);
+    QString workingDirectory() const { return workingDir_; }
+
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
@@ -43,6 +50,7 @@ private:
     int historyIndex_ = 0;
     QString historyDraft_;         // what was typed before browsing history
     bool shellAlive_ = false;
+    QString workingDir_;
 
     void applyStyle();
     void startShell();

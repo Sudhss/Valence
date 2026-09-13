@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointF>
 #include <QMouseEvent>
 #include <QEnterEvent>
 #include <QScrollBar>
@@ -50,7 +51,7 @@ QString editorStyle() {
         "  border: 1px solid %3;"
         "  border-radius: %4px;"
         "  padding: 6px 8px;"
-        "  selection-background-color: rgba(0, 255, 156, 0.16);"
+        "  selection-background-color: %8;"
         "  selection-color: %2;"
         "}"
         "QPlainTextEdit:focus { border: 1px solid %5; }"
@@ -63,13 +64,14 @@ QString editorStyle() {
         "QScrollBar::handle:horizontal { background: %7; border-radius: 2px; min-width: 18px; }"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
         "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }"
-    ).arg(Theme::EditorBg.name(),
+    ).arg(Theme::Base.name(),
           Theme::TextPrimary.name(),
           Theme::Border.name(QColor::HexArgb),
           QString::number(Theme::Radius - 2),
           Theme::AccentDim.name(QColor::HexArgb),
           Theme::TextSecondary.name(QColor::HexArgb),
-          Theme::ScrollThumb.name(QColor::HexArgb));
+          Theme::ScrollThumb.name(QColor::HexArgb),
+          Theme::SelectionBg.name(QColor::HexArgb));
 }
 
 QLabel* fieldLabel(const QString& text) {
@@ -324,19 +326,25 @@ void TestCaseCard::paintEvent(QPaintEvent* e) {
 
     const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
     QPainterPath path;
-    path.addRoundedRect(r, Theme::Radius, Theme::Radius);
+    path.addRoundedRect(r, Theme::RadiusPanel, Theme::RadiusPanel);
 
-    p.fillPath(path, Theme::PanelBg);
+    p.fillPath(path, Theme::Raised);
 
     // A failing card gets a tinted hairline, not a filled red block — the
     // badge already carries the verdict.
     QColor border = Theme::Border;
     if (verdict_ != Verdict::Pending) {
         border = verdictColor(verdict_);
-        border.setAlpha(verdict_ == Verdict::Accepted ? 50 : 80);
+        border.setAlpha(verdict_ == Verdict::Accepted ? 64 : 96);
     }
     p.setPen(QPen(border, 1));
     p.drawPath(path);
+
+    // A one-pixel highlight along the top edge only. This is what separates a
+    // card that sits ON the panel from a rectangle painted INTO it.
+    p.setPen(QPen(Theme::HighlightTop, 1));
+    p.drawLine(QPointF(r.left() + Theme::RadiusPanel, r.top()),
+               QPointF(r.right() - Theme::RadiusPanel, r.top()));
 
     QWidget::paintEvent(e);
 }

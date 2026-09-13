@@ -8,6 +8,10 @@
 #include "../core/undo_manager.h"
 #include "../core/selection.h"
 #include "cpp_highlighter.h"
+#include "snippets.h"
+#include "../theme/theme.h"
+
+class SnippetPopup;
 
 class EditorWidget : public QWidget {
     Q_OBJECT
@@ -47,8 +51,17 @@ public:
     void selectAll();
     void setSelection(int startRow, int startCol, int endRow, int endCol);
 
+    // ── Zoom ──
+    // Sized in pixels so the value means the same thing on every display.
+    void setFontPixelSize(int px);
+    int  fontPixelSize() const { return fontPixelSize_; }
+    static constexpr int MinFontPx = 8;
+    static constexpr int MaxFontPx = 40;
+
 signals:
     void modifiedChanged(bool modified);
+    // Ctrl+wheel asks the window to zoom every editor, not just this one.
+    void zoomStepRequested(int steps);
     void cursorPositionChanged(int row, int col);
     void saveRequested();
 
@@ -102,6 +115,17 @@ private:
     // animation happens to be.
     QVariantAnimation* scrollAnim_ = nullptr;
     int scrollTarget_ = 0;
+
+    // Zoom
+    int fontPixelSize_ = Theme::FontSizeEditor;
+    void applyFontMetrics();
+
+    // Snippets
+    SnippetPopup* snippetPopup_ = nullptr;
+    QString wordBeforeCursor(int* startCol = nullptr) const;
+    void updateSnippetSuggestion();
+    void hideSnippetSuggestion();
+    bool acceptSnippet();
 
     // File
     QString filePath_;

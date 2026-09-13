@@ -104,18 +104,25 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     openFolderBtn->setStyleSheet(QString(
         "QPushButton {"
         "  background: %1;"
-        "  color: %3;"
-        "  border: none;"
-        "  border-radius: 4px;"
-        "  font-weight: bold;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  border-radius: %4px;"
+        "  padding: 0 14px;"
+        "  font-weight: 600;"
         "}"
         "QPushButton:hover {"
-        "  background: %2;"
+        "  background: %5;"
+        "  border: 1px solid %6;"
+        "  color: %7;"
         "}"
-    ).arg(Theme::Accent.name(),
-          Theme::Accent.lighter(115).name(),
-          Theme::OnAccent.name()));
-    
+    ).arg(Theme::Raised.name(),
+          Theme::Accent.name(),
+          Theme::BorderMedium.name(QColor::HexArgb),
+          QString::number(Theme::Radius),
+          Theme::Overlay.name(),
+          Theme::AccentDim.name(QColor::HexArgb),
+          Theme::AccentHot.name()));
+
     connect(openFolderBtn, &QPushButton::clicked, this, [this]() {
         emit openFolderRequested();
     });
@@ -254,10 +261,10 @@ QWidget* FileExplorer::createToolbar() {
     connect(refreshBtn, &QPushButton::clicked, this, &FileExplorer::onRefresh);
     connect(collapseBtn, &QPushButton::clicked, this, &FileExplorer::onCollapseAll);
 
-    toolbar->setFixedHeight(36);
+    toolbar->setFixedHeight(Theme::HeaderHeight + 4);
     toolbar->setStyleSheet(QString(
-        "background: %1; border-bottom: 1px solid %2;"
-    ).arg(Theme::SidebarBg.name(), Theme::Border.name(QColor::HexArgb)));
+        "background: transparent; border-bottom: 1px solid %1;"
+    ).arg(Theme::Border.name(QColor::HexArgb)));
 
     return toolbar;
 }
@@ -288,60 +295,59 @@ QPushButton* FileExplorer::makeToolButton(const QString& text, const QString& to
 }
 
 void FileExplorer::applyStyle() {
+    // Placeholders must be contiguous from %1: QString::arg() takes at most
+    // nine, and a gap in the numbering silently shifts every substitution
+    // after it — which is how a colour ended up being used as a border radius.
     tree_->setStyleSheet(QString(
         "QTreeView {"
-        "  background: %1;"
-        "  color: %2;"
+        "  background: transparent;"
+        "  color: %1;"
         "  border: none;"
         "  outline: none;"
-        "  font-size: 12px;"
+        "  show-decoration-selected: 1;"
         "}"
         "QTreeView::item {"
-        "  height: 26px;"
+        "  height: %7px;"
         "  padding-left: 4px;"
         "  border: none;"
-        "  border-left: 2px solid transparent;"
-        "  border-radius: 0px;"
+        "  border-radius: %6px;"
+        "  margin: 1px 6px 1px 0px;"
         "}"
+        // The selected row is a raised surface with an accent edge, not a wash:
+        // it should look like a thing sitting on the sidebar, not a stain on it.
         "QTreeView::item:selected {"
-        "  background: rgba(255, 255, 255, 0.06);"
-        "  color: %3;"
-        "  border-left: 2px solid %4;"
+        "  background: %4;"
+        "  color: %2;"
+        "  border-left: 2px solid %3;"
         "}"
         "QTreeView::item:hover:!selected {"
-        "  background: rgba(255, 255, 255, 0.03);"
+        "  background: %5;"
+        "  color: %2;"
         "}"
-        "QTreeView::branch {"
-        "  background: %1;"
-        "}"
-        "QTreeView::branch:has-children:closed {"
+        "QTreeView::branch { background: transparent; }"
+        "QTreeView::branch:has-children:closed, QTreeView::branch:has-children:open {"
         "  image: none;"
         "}"
-        "QTreeView::branch:has-children:open {"
-        "  image: none;"
-        "}"
-        // Ultra-thin scrollbar
-        "QScrollBar:vertical {"
-        "  width: 4px;"
-        "  background: transparent;"
-        "}"
-        "QScrollBar::handle:vertical {"
-        "  background: rgba(255,255,255,0.08);"
-        "  border-radius: 2px;"
-        "  min-height: 20px;"
-        "}"
-        "QScrollBar::handle:vertical:hover {"
-        "  background: rgba(255,255,255,0.15);"
-        "}"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-        "  height: 0px;"
-        "}"
-    ).arg(Theme::SidebarBg.name(),
-          Theme::TextSecondary.name(QColor::HexArgb),
-          Theme::TextPrimary.name(),
-          Theme::Accent.name()));
+        "QScrollBar:vertical { width: 8px; background: transparent; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: %8; border-radius: 4px; min-height: 28px; }"
+        "QScrollBar::handle:vertical:hover { background: %9; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
+    ).arg(Theme::TextSecondary.name(QColor::HexArgb),    // %1
+          Theme::TextPrimary.name(),                     // %2
+          Theme::Accent.name(),                          // %3
+          Theme::Raised.name(),                          // %4
+          Theme::HoverWash.name(QColor::HexArgb),        // %5
+          QString::number(Theme::Radius - 2),            // %6
+          QString::number(Theme::RowHeight),             // %7
+          Theme::ScrollThumb.name(QColor::HexArgb),      // %8
+          Theme::ScrollThumbHover.name(QColor::HexArgb)  // %9
+          ));
 
-    setStyleSheet(QString("background: %1;").arg(Theme::SidebarBg.name()));
+    setStyleSheet(QString("FileExplorer { background: %1; border-right: 1px solid %2; }")
+                      .arg(Theme::chromeGradient(Theme::Chrome, Theme::Base),
+                           Theme::Border.name(QColor::HexArgb)));
+    setAttribute(Qt::WA_StyledBackground, true);
 }
 
 void FileExplorer::setRootPath(const QString& path) {

@@ -10,6 +10,7 @@
 #include <QTextBlock>
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
 
 TerminalWidget::TerminalWidget(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
@@ -55,9 +56,11 @@ TerminalWidget::TerminalWidget(QWidget* parent) : QWidget(parent) {
     headerLayout->addStretch();
     headerLayout->addWidget(clearButton);
 
-    headerWidget->setStyleSheet(QString("background: %1; border-top: 1px solid %2;")
-                                    .arg(Theme::TerminalBg.name(),
-                                         Theme::Border.name(QColor::HexArgb)));
+    headerWidget->setStyleSheet(QString(
+        "background: %1; border-top: 1px solid %2; border-bottom: 1px solid %3;")
+            .arg(Theme::chromeGradient(Theme::Chrome, Theme::Base),
+                 Theme::HighlightTop.name(QColor::HexArgb),
+                 Theme::Border.name(QColor::HexArgb)));
     layout->addWidget(headerWidget);
 
     // ── Output / input surface ──
@@ -114,8 +117,26 @@ void TerminalWidget::startShell() {
     shellAlive_ = true;
     statusLabel_->clear();
     ansiPending_.clear();
+    if (!workingDir_.isEmpty() && QDir(workingDir_).exists()) {
+        process_->setWorkingDirectory(workingDir_);
+    }
     process_->start(QStringLiteral("powershell.exe"),
                     {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile")});
+}
+
+void TerminalWidget::setWorkingDirectory(const QString& dir) {
+    if (dir.isEmpty() || dir == workingDir_ || !QDir(dir).exists()) return;
+    workingDir_ = dir;
+
+    // A live shell cannot have its directory changed from outside, so move it
+    // there. Written straight to stdin rather than echoed into the view: the
+    // shell's own new prompt is the feedback, and a stream of "cd" lines the
+    // user never typed would just be noise.
+    if (process_ && shellAlive_ && process_->state() == QProcess::Running) {
+        const QString cd = QStringLiteral("cd \"%1\"\n")
+                               .arg(QDir::toNativeSeparators(dir));
+        process_->write(cd.toLocal8Bit());
+    }
 }
 
 void TerminalWidget::applyStyle() {
@@ -125,7 +146,7 @@ void TerminalWidget::applyStyle() {
         "  color: %2;"
         "  border: none;"
         "  padding: 10px 14px;"
-        "  selection-background-color: rgba(0, 255, 156, 0.16);"
+        "  selection-background-color: %5;"
         "  selection-color: %2;"
         "}"
         "QScrollBar:vertical { width: 6px; background: transparent; margin: 0; }"
@@ -137,10 +158,11 @@ void TerminalWidget::applyStyle() {
         "QScrollBar::handle:horizontal { background: %3; border-radius: 3px; min-width: 24px; }"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }"
         "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }"
-    ).arg(Theme::TerminalBg.name(),
+    ).arg(Theme::Base.name(),
           Theme::TextPrimary.name(),
           Theme::ScrollThumb.name(QColor::HexArgb),
-          Theme::ScrollThumbHover.name(QColor::HexArgb)));
+          Theme::ScrollThumbHover.name(QColor::HexArgb),
+          Theme::SelectionBg.name(QColor::HexArgb)));
 
     setStyleSheet(QString("background: %1;").arg(Theme::TerminalBg.name()));
 }

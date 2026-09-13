@@ -1,4 +1,5 @@
 #include "editor_widget.h"
+#include "snippet_popup.h"
 #include "../theme/theme.h"
 #include <QPainter>
 #include <QKeyEvent>
@@ -10,20 +11,41 @@
 #include <algorithm>
 #include <cmath>
 
-EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
-    font_ = Theme::editorFont();
+void EditorWidget::applyFontMetrics() {
+    font_ = Theme::codeFont(fontPixelSize_);
     QFontMetrics fm(font_);
-    charWidth_ = fm.horizontalAdvance('M');
+    charWidth_ = qMax(1, fm.horizontalAdvance(QLatin1Char('M')));
     charHeight_ = fm.height();
     ascent_ = fm.ascent();
 
     // Verify the font really is fixed-pitch before trusting a whole-token draw.
     // If a fallback font sneaks in, glyph advances stop matching the grid and
     // the caret drifts away from the text — the bug the per-character path was
-    // originally written to fix.
-    monospaceExact_ = charWidth_ > 0 &&
+    // originally written to fix. Re-checked on every zoom, because hinting at a
+    // small size can round advances differently.
+    monospaceExact_ =
         fm.horizontalAdvance(QStringLiteral("MMMMMMMMMM")) == 10 * charWidth_ &&
         fm.horizontalAdvance(QStringLiteral("iiiiiiiiii")) == 10 * charWidth_;
+
+    updateGutterWidth();
+}
+
+void EditorWidget::setFontPixelSize(int px) {
+    px = std::clamp(px, MinFontPx, MaxFontPx);
+    if (px == fontPixelSize_) return;
+    fontPixelSize_ = px;
+
+    applyFontMetrics();
+    // Keep the caret where it was on screen rather than letting the view jump
+    // to an unrelated part of the file as the line height changes.
+    jumpScrollTo(cursor_.row * charHeight_ - height() / 2);
+    ensureCursorVisible();
+    hideSnippetSuggestion();
+    update();
+}
+
+EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
+    applyFontMetrics();
 
     scrollY_ = 0;
     gutterPadding_ = 14;
@@ -45,6 +67,8 @@ EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
         clampScroll();
         update();
     });
+
+    snippetPopup_ = new SnippetPopup(this);
 
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -536,6 +560,82 @@ void EditorWidget::indentBlock(int firstRow, int lastRow, bool unindent) {
     undoManager_.endCompound();
 }
 
+// ── Snippets ─────────────────────────────────────────────────────────────────
+
+QString EditorWidget::wordBeforeCursor(int* startCol) const {
+    const std::string& line = buffer_.line(cursor_.row);
+    int end = std::min(cursor_.col, (int)line.size());
+    int start = end;
+    while (start > 0 && isIdentLike(line[start - 1])) start--;
+    if (startCol) *startCol = start;
+    return QString::fromLatin1(line.data() + start, end - start);
+}
+
+void EditorWidget::updateSnippetSuggestion() {
+    // A selection means the user is doing something other than typing a word.
+    if (selection_.hasSelection(cursor_)) { hideSnippetSuggestion(); return; }
+
+    const QString word = wordBeforeCursor();
+    const QVector<Snippet> hits = Snippets::matching(word);
+    if (hits.isEmpty()) { hideSnippetSuggestion(); return; }
+
+    // Anchor under the caret's line, at the start of the word being completed.
+    int startCol = 0;
+    wordBeforeCursor(&startCol);
+    const QPoint anchor(xFromCol(startCol), yFromRow(cursor_.row) + charHeight_ + 2);
+    snippetPopup_->showFor(hits, anchor);
+}
+
+void EditorWidget::hideSnippetSuggestion() {
+    if (snippetPopup_ && snippetPopup_->isVisible()) snippetPopup_->hide();
+}
+
+bool EditorWidget::acceptSnippet() {
+    if (!snippetPopup_ || !snippetPopup_->isVisible()) return false;
+    const Snippet* snippet = snippetPopup_->selected();
+    if (!snippet) return false;
+
+    int startCol = 0;
+    const QString word = wordBeforeCursor(&startCol);
+    hideSnippetSuggestion();
+    if (word.isEmpty()) return false;
+
+    // The whole expansion is one undo step: Ctrl+Z takes the template away and
+    // leaves the trigger the user typed.
+    undoManager_.beginCompound();
+
+    const Position wordStart{cursor_.row, startCol};
+    const std::string removed = buffer_.getText(wordStart, cursor_);
+    undoManager_.recordDelete(wordStart, removed);
+    buffer_.deleteRange(wordStart, cursor_);
+    cursor_ = wordStart;
+
+    // Split at the caret marker: insert what comes before it, remember where
+    // that landed, then append the remainder after it.
+    const int markerAt = snippet->body.indexOf(Snippets::Caret);
+    const QString before = markerAt >= 0 ? snippet->body.left(markerAt) : snippet->body;
+    const QString after  = markerAt >= 0 ? snippet->body.mid(markerAt + 1) : QString();
+
+    const std::string beforeUtf8 = before.toStdString();
+    undoManager_.recordInsert(cursor_, beforeUtf8);
+    const Position caret = buffer_.insertText(cursor_.row, cursor_.col, beforeUtf8);
+
+    if (!after.isEmpty()) {
+        const std::string afterUtf8 = after.toStdString();
+        undoManager_.recordInsert(caret, afterUtf8);
+        buffer_.insertText(caret.row, caret.col, afterUtf8);
+    }
+
+    undoManager_.endCompound();
+
+    cursor_ = caret;
+    selection_.clear();
+    setModified(true);
+    updateGutterWidth();
+    rebuildCommentState(wordStart.row);
+    return true;
+}
+
 // ── Edit Operations ──
 
 void EditorWidget::handleChar(char ch) {
@@ -895,6 +995,33 @@ void EditorWidget::keyPressEvent(QKeyEvent* e) {
     bool ctrl = e->modifiers() & Qt::ControlModifier;
     bool shift = e->modifiers() & Qt::ShiftModifier;
 
+    if (snippetPopup_->isVisible() && !ctrl) {
+        switch (e->key()) {
+        case Qt::Key_Escape:
+            hideSnippetSuggestion();
+            return;
+        case Qt::Key_Up:
+            snippetPopup_->moveSelection(-1);
+            return;
+        case Qt::Key_Down:
+            snippetPopup_->moveSelection(1);
+            return;
+        case Qt::Key_Tab:
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            if (acceptSnippet()) {
+                ensureCursorVisible();
+                resetCursorBlink();
+                emit cursorPositionChanged(cursor_.row, cursor_.col);
+                update();
+                return;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
     if (ctrl) {
         // ── Ctrl+ shortcuts ──
         switch (e->key()) {
@@ -944,6 +1071,22 @@ void EditorWidget::keyPressEvent(QKeyEvent* e) {
         }
     }
 
+    // Offer a snippet only while a word is actively being typed or deleted;
+    // any other key dismisses the list.
+    switch (e->key()) {
+    case Qt::Key_Backspace:
+    case Qt::Key_Delete:
+        updateSnippetSuggestion();
+        break;
+    default:
+        if (!ctrl && !e->text().isEmpty() && isIdentLike(e->text().at(0).toLatin1())) {
+            updateSnippetSuggestion();
+        } else {
+            hideSnippetSuggestion();
+        }
+        break;
+    }
+
     ensureCursorVisible();
     resetCursorBlink();
     emit cursorPositionChanged(cursor_.row, cursor_.col);
@@ -953,6 +1096,7 @@ void EditorWidget::keyPressEvent(QKeyEvent* e) {
 // ── Mouse Handling ──
 
 void EditorWidget::mousePressEvent(QMouseEvent* e) {
+    hideSnippetSuggestion();
     if (e->button() == Qt::LeftButton && e->position().x() > gutterWidth_) {
         int row = rowFromY((int)e->position().y());
         int col = colFromX((int)e->position().x(), row);
@@ -1011,6 +1155,13 @@ void EditorWidget::mouseMoveEvent(QMouseEvent* e) {
 void EditorWidget::wheelEvent(QWheelEvent* e) {
     const QPoint angle = e->angleDelta();
 
+    if (e->modifiers() & Qt::ControlModifier) {
+        const int steps = angle.y() / 120;
+        if (steps != 0) emit zoomStepRequested(steps);
+        e->accept();
+        return;
+    }
+
     // Shift+wheel pans horizontally, as does a real horizontal wheel.
     if ((e->modifiers() & Qt::ShiftModifier) || angle.x() != 0) {
         const int delta = (angle.x() != 0) ? angle.x() : angle.y();
@@ -1023,6 +1174,7 @@ void EditorWidget::wheelEvent(QWheelEvent* e) {
 
     if (angle.y() == 0) { QWidget::wheelEvent(e); return; }
 
+    hideSnippetSuggestion();
     const int step = (angle.y() * 3 * charHeight_) / 120;
     animateScrollTo(scrollTarget_ - step);
     e->accept();

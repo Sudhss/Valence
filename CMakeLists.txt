@@ -34,6 +34,9 @@ set(PROJECT_SOURCES
     src/editor/editor_widget.cpp
     src/editor/cpp_highlighter.h
     src/editor/cpp_highlighter.cpp
+    src/editor/snippets.h
+    src/editor/snippet_popup.h
+    src/editor/snippet_popup.cpp
 
     # CPH judge engine
     src/cph/test_case.h

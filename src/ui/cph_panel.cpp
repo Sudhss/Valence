@@ -84,7 +84,8 @@ struct CphPanel::Impl {
 CphPanel::CphPanel(QWidget* parent) : QWidget(parent), d(new Impl) {
     d->q = this;
 
-    setStyleSheet(QString("CphPanel { background: %1; }").arg(Theme::PanelBg.name()));
+    setStyleSheet(QString("CphPanel { background: %1; border-left: 1px solid %2; }")
+                      .arg(Theme::Chrome.name(), Theme::Border.name(QColor::HexArgb)));
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(260);
 
@@ -95,9 +96,10 @@ CphPanel::CphPanel(QWidget* parent) : QWidget(parent), d(new Impl) {
     // ── Header ──
     auto* header = new QWidget(this);
     header->setFixedHeight(Theme::HeaderHeight);
-    header->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-                              .arg(Theme::TerminalBg.name(),
-                                   Theme::Border.name(QColor::HexArgb)));
+    header->setStyleSheet(QString(
+        "background: %1; border-bottom: 1px solid %2;")
+            .arg(Theme::chromeGradient(Theme::Chrome, Theme::Base),
+                 Theme::Border.name(QColor::HexArgb)));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(Theme::SpaceM, 0, Theme::SpaceS, 0);
     hl->setSpacing(Theme::SpaceS);
@@ -177,15 +179,14 @@ CphPanel::CphPanel(QWidget* parent) : QWidget(parent), d(new Impl) {
     d->scroll->setFrameShape(QFrame::NoFrame);
     d->scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     d->scroll->setStyleSheet(QString(
-        "QScrollArea { background: %1; border: none; }"
-        "QScrollArea > QWidget > QWidget { background: %1; }"
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollArea > QWidget > QWidget { background: transparent; }"
         "QScrollBar:vertical { width: 6px; background: transparent; margin: 0; }"
-        "QScrollBar::handle:vertical { background: %2; border-radius: 3px; min-height: 24px; }"
-        "QScrollBar::handle:vertical:hover { background: %3; }"
+        "QScrollBar::handle:vertical { background: %1; border-radius: 3px; min-height: 24px; }"
+        "QScrollBar::handle:vertical:hover { background: %2; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
         "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
-    ).arg(Theme::PanelBg.name(),
-          Theme::ScrollThumb.name(QColor::HexArgb),
+    ).arg(Theme::ScrollThumb.name(QColor::HexArgb),
           Theme::ScrollThumbHover.name(QColor::HexArgb)));
     root->addWidget(d->scroll, 1);
 

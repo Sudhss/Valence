@@ -37,8 +37,10 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     connect(msgTimer_, &QTimer::timeout, this, [this]() { msgLabel_->clear(); });
 
     setStyleSheet(QString(
-        "background: %1; border-top: 1px solid %2;"
-    ).arg(Theme::SidebarBg.name(), Theme::Border.name(QColor::HexArgb)));
+        "StatusBar { background: %1; border-top: 1px solid %2; }"
+    ).arg(Theme::chromeGradient(Theme::Chrome, Theme::Base),
+          Theme::HighlightTop.name(QColor::HexArgb)));
+    setAttribute(Qt::WA_StyledBackground, true);
 }
 
 void StatusBar::setFileName(const QString& name) {

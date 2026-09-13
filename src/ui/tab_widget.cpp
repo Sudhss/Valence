@@ -63,27 +63,33 @@ void TabWidget::applyStyle() {
         "}"
         "QTabBar {"
         "  background: %2;"
-        "  border-bottom: 1px solid %3;"
         "  qproperty-drawBase: 0;"
         "}"
+        // Inactive tabs sit back on the chrome surface with no fill of their
+        // own, so the active one is the only thing that reads as forward.
         "QTabBar::tab {"
         "  background: transparent;"
         "  color: %4;"
-        "  padding: 9px 14px;"
+        "  padding: 10px 16px;"
         "  border: none;"
-        "  border-bottom: 2px solid transparent;"
+        "  border-top: 2px solid transparent;"
+        "  border-right: 1px solid %3;"
         "  font-size: 13px;"
         "  min-width: 0px;"
         "  margin: 0;"
         "}"
+        // The active tab is a raised surface lifted out of the strip, lit along
+        // its top edge by the accent, and sharing the editor's colour so the
+        // two read as one continuous plane. An underline alone leaves every tab
+        // looking equally flat.
         "QTabBar::tab:selected {"
         "  color: %5;"
-        "  border-bottom: 2px solid %6;"
-        "  background: rgba(255, 255, 255, 0.02);"
+        "  background: %1;"
+        "  border-top: 2px solid %6;"
         "}"
         "QTabBar::tab:hover:!selected {"
         "  color: %5;"
-        "  background: rgba(255, 255, 255, 0.02);"
+        "  background: %7;"
         "}"
         "QTabBar::close-button {"
         "  image: none;"
@@ -96,12 +102,13 @@ void TabWidget::applyStyle() {
         "QTabBar::close-button:hover {"
         "  background: rgba(255, 255, 255, 0.12);"
         "}"
-    ).arg(Theme::EditorBg.name(),
-          Theme::TitlebarBg.name(),
-          Theme::Border.name(QColor::HexArgb),
-          Theme::TextMuted.name(QColor::HexArgb),
-          Theme::TextPrimary.name(),
-          Theme::Accent.name()));
+    ).arg(Theme::Surface.name(),                        // %1 active tab + pane
+          Theme::Chrome.name(),                         // %2 the strip behind them
+          Theme::Border.name(QColor::HexArgb),          // %3 separator
+          Theme::TextMuted.name(QColor::HexArgb),       // %4 inactive label
+          Theme::TextPrimary.name(),                    // %5 active label
+          Theme::Accent.name(),                         // %6 top indicator
+          Theme::HoverWash.name(QColor::HexArgb)));     // %7 hover
 }
 
 int TabWidget::addEditor(EditorWidget* editor, const QString& label) {
