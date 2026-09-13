@@ -41,13 +41,7 @@ void UndoManager::recordInsert(Position pos, const std::string& text) {
                       std::chrono::steady_clock::now()};
 
     redoStack_.clear();
-
-    if (shouldGroup(action)) {
-        undoStack_.back().push_back(action);
-    } else {
-        undoStack_.push_back({action});
-    }
-    forceNext_ = false;
+    push(action);
 }
 
 void UndoManager::recordDelete(Position pos, const std::string& text) {
@@ -55,13 +49,42 @@ void UndoManager::recordDelete(Position pos, const std::string& text) {
                       std::chrono::steady_clock::now()};
 
     redoStack_.clear();
+    push(action);
+}
 
-    if (shouldGroup(action)) {
+// Everything recorded inside a compound joins the group the compound opened.
+void UndoManager::push(const EditAction& action) {
+    if (compoundDepth_ > 0 && compoundStarted_ && !undoStack_.empty()) {
+        undoStack_.back().push_back(action);
+    } else if (shouldGroup(action)) {
         undoStack_.back().push_back(action);
     } else {
         undoStack_.push_back({action});
+        trim();
     }
+    if (compoundDepth_ > 0) compoundStarted_ = true;
     forceNext_ = false;
+}
+
+void UndoManager::beginCompound() {
+    if (compoundDepth_++ == 0) {
+        forceNext_ = true;        // the first edit inside opens a fresh group
+        compoundStarted_ = false;
+    }
+}
+
+void UndoManager::endCompound() {
+    if (compoundDepth_ > 0 && --compoundDepth_ == 0) {
+        compoundStarted_ = false;
+        forceNext_ = true;        // the next edit must not join the compound
+    }
+}
+
+void UndoManager::trim() {
+    if (undoStack_.size() > MAX_GROUPS) {
+        undoStack_.erase(undoStack_.begin(),
+                         undoStack_.begin() + (undoStack_.size() - MAX_GROUPS));
+    }
 }
 
 void UndoManager::forceNewGroup() {

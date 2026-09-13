@@ -509,7 +509,7 @@ void EditorWidget::adjustColAfterIndent(int row, int delta) {
 void EditorWidget::indentBlock(int firstRow, int lastRow, bool unindent) {
     // One undo step for the whole block, so Ctrl+Z undoes the indent the user
     // applied rather than unpicking it a line at a time.
-    undoManager_.forceNewGroup();
+    undoManager_.beginCompound();
 
     for (int row = firstRow; row <= lastRow && row < buffer_.lineCount(); row++) {
         const std::string& line = buffer_.line(row);
@@ -533,7 +533,7 @@ void EditorWidget::indentBlock(int firstRow, int lastRow, bool unindent) {
         }
     }
 
-    undoManager_.forceNewGroup();
+    undoManager_.endCompound();
 }
 
 // ── Edit Operations ──
@@ -552,12 +552,15 @@ void EditorWidget::handleChar(char ch) {
         return;
     }
 
+    if (ch == '}') undoManager_.beginCompound();
+
     buffer_.insertChar(cursor_.row, cursor_.col, ch);
     undoManager_.recordInsert(cursor_, std::string(1, ch));
     cursor_.col++;
 
     if (ch == '}') {
         reindentClosingBrace();
+        undoManager_.endCompound();
     } else if (char closing = closerFor(ch)) {
         // Auto-closing into the middle of a word is never what was meant, and
         // "don't" must not become "don''t".

@@ -163,8 +163,13 @@ bool TextBuffer::loadFromFile(const std::string& path) {
     if (!file.is_open()) return false;
 
     lines_.clear();
+    lines_.reserve(1024);            // a large file should not realloc dozens of times
+
     std::string line;
     while (std::getline(file, line)) {
+        // Text mode already folds CRLF on Windows, but a file with CR endings
+        // read on another platform would otherwise leave a stray CR at the end
+        // of every line, offsetting every column by one.
         if (!line.empty() && line.back() == '\r') line.pop_back();
         lines_.push_back(line);
     }
@@ -178,9 +183,19 @@ bool TextBuffer::saveToFile(const std::string& path) const {
 
     for (int i = 0; i < (int)lines_.size(); i++) {
         file << lines_[i];
-        if (i < (int)lines_.size() - 1) file << '\n';
+        // Terminate every line, the last one included. Without the final
+        // newline, opening a normal source file and saving it unchanged
+        // silently stripped the trailing newline it arrived with.
+        file << '\n';
     }
-    return true;
+
+    // is_open() only says the file was created. A full disk or a read-only
+    // target fails here, and reporting success would tell the user their work
+    // was saved when it was not.
+    file.flush();
+    if (!file.good()) return false;
+    file.close();
+    return file.good();
 }
 
 int TextBuffer::lineCount() const { return (int)lines_.size(); }
@@ -188,7 +203,13 @@ int TextBuffer::lineLength(int row) const {
     if (row < 0 || row >= (int)lines_.size()) return 0;
     return (int)lines_[row].size();
 }
-const std::string& TextBuffer::line(int row) const { return lines_[row]; }
+const std::string& TextBuffer::line(int row) const {
+    // Row indices reach here from mouse coordinates and scroll arithmetic, so
+    // an out-of-range value is a rendering glitch rather than a crash.
+    static const std::string kEmpty;
+    if (row < 0 || row >= (int)lines_.size()) return kEmpty;
+    return lines_[row];
+}
 
 void TextBuffer::clear() {
     lines_.clear();

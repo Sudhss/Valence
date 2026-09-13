@@ -44,6 +44,7 @@ std::vector<Token> CppHighlighter::tokenize(const std::string& line, bool& inBlo
     std::vector<Token> tokens;
     int i = 0;
     int len = (int)line.size();
+    tokens.reserve(line.size() / 4 + 8);
 
     while (i < len) {
         // Inside block comment continuation
@@ -120,11 +121,23 @@ std::vector<Token> CppHighlighter::tokenize(const std::string& line, bool& inBlo
         if (std::isdigit((unsigned char)c) ||
             (c == '.' && i + 1 < len && std::isdigit((unsigned char)line[i + 1]))) {
             int start = i;
+            auto isSeparator = [&](int at) {
+                // 1'000'000'007 is ordinary competitive-programming code. Without
+                // this the apostrophe opened a character literal and painted the
+                // rest of the line as a string.
+                return line[at] == '\'' && at + 1 < len &&
+                       std::isalnum((unsigned char)line[at + 1]);
+            };
+
             if (c == '0' && i + 1 < len && (line[i + 1] == 'x' || line[i + 1] == 'X')) {
                 i += 2;
-                while (i < len && std::isxdigit((unsigned char)line[i])) i++;
+                while (i < len && (std::isxdigit((unsigned char)line[i]) || isSeparator(i))) i++;
+            } else if (c == '0' && i + 1 < len && (line[i + 1] == 'b' || line[i + 1] == 'B')) {
+                i += 2;
+                while (i < len && (line[i] == '0' || line[i] == '1' || isSeparator(i))) i++;
             } else {
-                while (i < len && (std::isdigit((unsigned char)line[i]) || line[i] == '.')) i++;
+                while (i < len && (std::isdigit((unsigned char)line[i]) ||
+                                   line[i] == '.' || isSeparator(i))) i++;
                 if (i < len && (line[i] == 'e' || line[i] == 'E')) {
                     i++;
                     if (i < len && (line[i] == '+' || line[i] == '-')) i++;
@@ -142,7 +155,7 @@ std::vector<Token> CppHighlighter::tokenize(const std::string& line, bool& inBlo
         if (isIdentStart(c)) {
             int start = i;
             while (i < len && isIdentChar(line[i])) i++;
-            std::string word = line.substr(start, i - start);
+            const std::string_view word(line.data() + start, i - start);
 
             // Check if followed by '(' → function
             int peek = i;
@@ -161,11 +174,20 @@ std::vector<Token> CppHighlighter::tokenize(const std::string& line, bool& inBlo
             continue;
         }
 
-        // Punctuation (operators, braces, etc.)
+        // Punctuation (operators, braces, etc.). Emitted as a run rather than one
+        // token per character: "}));" is one draw call, not four.
         {
             int start = i;
-            i++;
-            tokens.push_back({TokenType::Punctuation, start, 1});
+            while (i < len) {
+                const char p = line[i];
+                if (std::isspace((unsigned char)p) || isIdentStart(p) ||
+                    std::isdigit((unsigned char)p) || p == '"' || p == '\'' || p == '#') break;
+                // Stop before something that starts a comment.
+                if (p == '/' && i + 1 < len && (line[i + 1] == '/' || line[i + 1] == '*')) break;
+                i++;
+            }
+            if (i == start) i++;        // always make progress
+            tokens.push_back({TokenType::Punctuation, start, i - start});
         }
     }
 
