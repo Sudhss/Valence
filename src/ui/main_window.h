@@ -4,12 +4,19 @@
 #include "file_explorer.h"
 #include "terminal_widget.h"
 #include "status_bar.h"
+#include "cph_panel.h"
+
+class QDockWidget;
+class QSplitter;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
     MainWindow();
+
+protected:
+    void closeEvent(QCloseEvent* e) override;
 
 private slots:
     void newFile();
@@ -26,16 +33,24 @@ private slots:
     void onEditorSaveRequested();
     void toggleTerminal();
     void toggleSidebar();
+    void toggleJudgePanel();
     void runCurrentFile();
     void buildCurrentFile();
 
 private:
-    TabWidget* tabWidget_;
-    FileExplorer* fileExplorer_;
-    TerminalWidget* terminal_;
-    StatusBar* statusBar_;
-    QWidget* sidebarContainer_;
-    QWidget* terminalContainer_;
+    TabWidget* tabWidget_ = nullptr;
+    FileExplorer* fileExplorer_ = nullptr;
+    TerminalWidget* terminal_ = nullptr;
+    StatusBar* statusBar_ = nullptr;
+    CphPanel* cphPanel_ = nullptr;
+    QDockWidget* cphDock_ = nullptr;
+    QSplitter* vertSplitter_ = nullptr;
+    QSplitter* horzSplitter_ = nullptr;
+
+    // Remembered extents so toggling a panel off and on again restores the
+    // size the user chose, instead of snapping back to the default.
+    int lastSidebarWidth_ = 220;
+    int lastTerminalHeight_ = 200;
 
     void setupUI();
     void setupMenuBar();
@@ -43,5 +58,7 @@ private:
     void updateWindowTitle();
     void openFilePath(const QString& path);
     EditorWidget* createEditor();
-    void connectEditor(EditorWidget* editor, int tabIndex);
+    void connectEditor(EditorWidget* editor);
+    bool confirmDiscardChanges();
+    void syncJudgeTarget();
 };

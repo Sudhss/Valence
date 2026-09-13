@@ -8,6 +8,13 @@ set(CMAKE_AUTORCC ON)
 set(APP_ICON_RESOURCE_WINDOWS app.rc)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Default to an optimized build. Valence is an editor: an unoptimized build
+# repaints noticeably slower, and a bare `cmake ..` should not produce that.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
@@ -28,6 +35,11 @@ set(PROJECT_SOURCES
     src/editor/cpp_highlighter.h
     src/editor/cpp_highlighter.cpp
 
+    # CPH judge engine
+    src/cph/test_case.h
+    src/cph/judge.h
+    src/cph/judge.cpp
+
     # UI
     src/ui/main_window.h
     src/ui/main_window.cpp
@@ -39,6 +51,10 @@ set(PROJECT_SOURCES
     src/ui/terminal_widget.cpp
     src/ui/status_bar.h
     src/ui/status_bar.cpp
+    src/ui/cph_panel.h
+    src/ui/cph_panel.cpp
+    src/ui/test_case_card.h
+    src/ui/test_case_card.cpp
 
     # Theme
     src/theme/theme.h
@@ -62,6 +78,10 @@ endif()
 target_link_libraries(Valence PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
 target_include_directories(Valence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(Valence PRIVATE -Wall -Wextra -Wno-unused-parameter)
+endif()
 
 set_target_properties(Valence PROPERTIES
     MACOSX_BUNDLE TRUE

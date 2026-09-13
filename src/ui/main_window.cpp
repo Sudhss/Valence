@@ -7,8 +7,11 @@
 #include <QMessageBox>
 #include <QShortcut>
 #include <QKeyEvent>
+#include <QCloseEvent>
 #include <QFileInfo>
 #include <QApplication>
+#include <QDockWidget>
+#include <algorithm>
 
 MainWindow::MainWindow() {
     setupUI();
@@ -96,30 +99,46 @@ void MainWindow::setupUI() {
     statusBar_ = new StatusBar(this);
 
     // Vertical splitter: editor tabs on top, terminal on bottom
-    auto* vertSplitter = new QSplitter(Qt::Vertical);
-    vertSplitter->setChildrenCollapsible(true);
-    vertSplitter->addWidget(tabWidget_);
-    vertSplitter->addWidget(terminal_);
-    vertSplitter->setSizes({500, 200});
-    vertSplitter->setHandleWidth(1);
+    vertSplitter_ = new QSplitter(Qt::Vertical);
+    vertSplitter_->setChildrenCollapsible(true);
+    vertSplitter_->addWidget(tabWidget_);
+    vertSplitter_->addWidget(terminal_);
+    vertSplitter_->setSizes({500, lastTerminalHeight_});
+    vertSplitter_->setHandleWidth(1);
 
     // Horizontal splitter: sidebar on left, editor area on right
-    auto* horzSplitter = new QSplitter(Qt::Horizontal);
-    horzSplitter->setChildrenCollapsible(true);
-    horzSplitter->addWidget(fileExplorer_);
-    horzSplitter->addWidget(vertSplitter);
-    horzSplitter->setSizes({220, 1060});
-    horzSplitter->setHandleWidth(1);
+    horzSplitter_ = new QSplitter(Qt::Horizontal);
+    horzSplitter_->setChildrenCollapsible(true);
+    horzSplitter_->addWidget(fileExplorer_);
+    horzSplitter_->addWidget(vertSplitter_);
+    horzSplitter_->setSizes({lastSidebarWidth_, 1060});
+    horzSplitter_->setHandleWidth(1);
 
     // Central widget
     auto* centralWidget = new QWidget(this);
     auto* mainLayout = new QVBoxLayout(centralWidget);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-    mainLayout->addWidget(horzSplitter, 1);
+    mainLayout->addWidget(horzSplitter_, 1);
     mainLayout->addWidget(statusBar_);
 
     setCentralWidget(centralWidget);
+
+    // ── Judge panel (CPH) — a dock so the user can resize, float or hide it ──
+    cphPanel_ = new CphPanel(this);
+    cphDock_ = new QDockWidget(this);
+    cphDock_->setObjectName("JudgeDock");
+    cphDock_->setWidget(cphPanel_);
+    cphDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+    // No title bar: the panel paints its own header, and Qt's default one is
+    // unstyled chrome that would break the theme.
+    cphDock_->setTitleBarWidget(new QWidget(cphDock_));
+    cphDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+    cphDock_->setStyleSheet(QString("QDockWidget { border: none; background: %1; }")
+                                .arg(Theme::PanelBg.name()));
+    addDockWidget(Qt::RightDockWidgetArea, cphDock_);
+    resizeDocks({cphDock_}, {360}, Qt::Horizontal);
+    cphDock_->hide();   // opt-in: Ctrl+J, or the Run menu
 
     // Connections
     connect(tabWidget_, &TabWidget::currentChanged, this, &MainWindow::onTabChanged);
@@ -127,20 +146,24 @@ void MainWindow::setupUI() {
     connect(fileExplorer_, &FileExplorer::fileDoubleClicked, this, &MainWindow::onFileDoubleClicked);
     connect(fileExplorer_, &FileExplorer::fileCreatedWithBoilerplate, this, &MainWindow::onFileCreatedWithBoilerplate);
     connect(fileExplorer_, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
+
+    // The panel asks us to flush the editor to disk before it compiles. This is
+    // a direct connection, so the save completes before runAll() reads the file.
+    connect(cphPanel_, &CphPanel::saveBeforeRunRequested, this, &MainWindow::saveFile);
 }
 
 void MainWindow::setupMenuBar() {
     auto* fileMenu = menuBar()->addMenu("File");
-    fileMenu->addAction("New File", this, &MainWindow::newFile, QKeySequence("Ctrl+N"));
-    fileMenu->addAction("Open File...", this, &MainWindow::openFile, QKeySequence("Ctrl+O"));
-    fileMenu->addAction("Open Folder...", this, &MainWindow::openFolder, QKeySequence("Ctrl+Shift+O"));
+    fileMenu->addAction("New File", QKeySequence("Ctrl+N"), this, &MainWindow::newFile);
+    fileMenu->addAction("Open File...", QKeySequence("Ctrl+O"), this, &MainWindow::openFile);
+    fileMenu->addAction("Open Folder...", QKeySequence("Ctrl+Shift+O"), this, &MainWindow::openFolder);
     fileMenu->addSeparator();
     // NOTE: Ctrl+S is handled by EditorWidget, which emits saveRequested()
     auto* saveAction = fileMenu->addAction("Save", this, &MainWindow::saveFile);
     saveAction->setShortcut(QKeySequence()); // No shortcut — editor handles Ctrl+S
-    fileMenu->addAction("Save As...", this, &MainWindow::saveFileAs, QKeySequence("Ctrl+Shift+S"));
+    fileMenu->addAction("Save As...", QKeySequence("Ctrl+Shift+S"), this, &MainWindow::saveFileAs);
     fileMenu->addSeparator();
-    fileMenu->addAction("Exit", this, &QApplication::quit, QKeySequence("Alt+F4"));
+    fileMenu->addAction("Exit", QKeySequence("Alt+F4"), this, &MainWindow::close);
 
     // Edit menu — NO keyboard shortcuts here!
     // All Ctrl+Z/Y/C/X/V/A are handled directly by EditorWidget::keyPressEvent
@@ -168,12 +191,18 @@ void MainWindow::setupMenuBar() {
     });
 
     auto* viewMenu = menuBar()->addMenu("View");
-    viewMenu->addAction("Toggle Terminal", this, &MainWindow::toggleTerminal, QKeySequence("Ctrl+`"));
-    viewMenu->addAction("Toggle Sidebar", this, &MainWindow::toggleSidebar, QKeySequence("Ctrl+B"));
+    viewMenu->addAction("Toggle Terminal", QKeySequence("Ctrl+`"), this, &MainWindow::toggleTerminal);
+    viewMenu->addAction("Toggle Sidebar", QKeySequence("Ctrl+B"), this, &MainWindow::toggleSidebar);
+    viewMenu->addAction("Toggle Judge Panel", QKeySequence("Ctrl+J"), this, &MainWindow::toggleJudgePanel);
 
     auto* runMenu = menuBar()->addMenu("Run");
-    runMenu->addAction("▶  Build & Run", this, &MainWindow::runCurrentFile, QKeySequence("F5"));
-    runMenu->addAction("Build Only", this, &MainWindow::buildCurrentFile, QKeySequence("Ctrl+Shift+B"));
+    runMenu->addAction("Run Test Cases", QKeySequence("Ctrl+Shift+J"), this, [this]() {
+        if (cphDock_->isHidden()) toggleJudgePanel();
+        cphPanel_->runAll();
+    });
+    runMenu->addSeparator();
+    runMenu->addAction("▶  Build & Run", QKeySequence("F5"), this, &MainWindow::runCurrentFile);
+    runMenu->addAction("Build Only", QKeySequence("Ctrl+Shift+B"), this, &MainWindow::buildCurrentFile);
 }
 
 void MainWindow::setupShortcuts() {
@@ -193,7 +222,7 @@ EditorWidget* MainWindow::createEditor() {
     return editor;
 }
 
-void MainWindow::connectEditor(EditorWidget* editor, int tabIndex) {
+void MainWindow::connectEditor(EditorWidget* editor) {
     connect(editor, &EditorWidget::cursorPositionChanged,
             this, &MainWindow::onCursorPositionChanged);
     connect(editor, &EditorWidget::modifiedChanged,
@@ -206,8 +235,8 @@ void MainWindow::connectEditor(EditorWidget* editor, int tabIndex) {
 
 void MainWindow::newFile() {
     auto* editor = createEditor();
-    int idx = tabWidget_->addEditor(editor, "untitled");
-    connectEditor(editor, idx);
+    tabWidget_->addEditor(editor, "untitled");
+    connectEditor(editor);
     editor->setFocus();
 }
 
@@ -239,8 +268,8 @@ void MainWindow::openFilePath(const QString& path) {
         return;
     }
 
-    int idx = tabWidget_->addEditor(editor, editor->fileName());
-    connectEditor(editor, idx);
+    tabWidget_->addEditor(editor, editor->fileName());
+    connectEditor(editor);
     editor->setFocus();
     statusBar_->setFileName(editor->fileName());
     updateWindowTitle();
@@ -271,6 +300,7 @@ void MainWindow::saveFileAs() {
 
     editor->saveFileAs(path);
     tabWidget_->updateTabLabel(tabWidget_->currentIndex());
+    syncJudgeTarget();
     updateWindowTitle();
 }
 
@@ -288,6 +318,7 @@ void MainWindow::onTabChanged(int index) {
         statusBar_->setCursorPosition(editor->currentRow(), editor->currentCol());
         editor->setFocus();
     }
+    syncJudgeTarget();
     updateWindowTitle();
 }
 
@@ -350,11 +381,82 @@ void MainWindow::onEditorSaveRequested() {
 }
 
 void MainWindow::toggleTerminal() {
-    terminal_->setVisible(!terminal_->isVisible());
+    // Remember the height the user dragged to, so hiding and re-showing the
+    // terminal does not silently reset it to the default.
+    if (terminal_->isVisible()) {
+        int h = vertSplitter_->sizes().value(1);
+        if (h > 0) lastTerminalHeight_ = h;
+        terminal_->hide();
+    } else {
+        terminal_->show();
+        vertSplitter_->setSizes({std::max(1, vertSplitter_->height() - lastTerminalHeight_),
+                                 lastTerminalHeight_});
+    }
 }
 
 void MainWindow::toggleSidebar() {
-    fileExplorer_->setVisible(!fileExplorer_->isVisible());
+    if (fileExplorer_->isVisible()) {
+        int w = horzSplitter_->sizes().value(0);
+        if (w > 0) lastSidebarWidth_ = w;
+        fileExplorer_->hide();
+    } else {
+        fileExplorer_->show();
+        horzSplitter_->setSizes({lastSidebarWidth_,
+                                 std::max(1, horzSplitter_->width() - lastSidebarWidth_)});
+    }
+}
+
+void MainWindow::toggleJudgePanel() {
+    if (cphDock_->isVisible()) {
+        cphDock_->hide();
+    } else {
+        cphDock_->show();
+        syncJudgeTarget();
+    }
+}
+
+void MainWindow::syncJudgeTarget() {
+    auto* editor = tabWidget_->currentEditor();
+    cphPanel_->setTargetFile(editor ? editor->filePath() : QString());
+}
+
+// Returns false if the user cancelled — the caller must then abort whatever it
+// was doing (closing a tab, quitting the app).
+bool MainWindow::confirmDiscardChanges() {
+    for (int i = tabWidget_->count() - 1; i >= 0; --i) {
+        auto* editor = tabWidget_->editorAt(i);
+        if (!editor || !editor->isModified()) continue;
+
+        tabWidget_->setCurrentIndex(i);
+        auto result = QMessageBox::question(this, "Unsaved Changes",
+            QString("Save changes to %1?").arg(editor->fileName()),
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+        if (result == QMessageBox::Cancel) return false;
+        if (result == QMessageBox::Save) {
+            if (editor->filePath().isEmpty()) {
+                QString path = QFileDialog::getSaveFileName(this, "Save File",
+                    fileExplorer_->rootPath(),
+                    "C++ Files (*.cpp *.h *.hpp *.cc *.cxx);;All Files (*)");
+                if (path.isEmpty()) return false;   // cancelled the save => cancel the close
+                if (!editor->saveFileAs(path)) return false;
+            } else if (!editor->saveFile()) {
+                QMessageBox::warning(this, "Save Failed",
+                    QString("Could not write %1.").arg(editor->filePath()));
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void MainWindow::closeEvent(QCloseEvent* e) {
+    if (!confirmDiscardChanges()) {
+        e->ignore();
+        return;
+    }
+    cphPanel_->persist();   // don't lose the user's test cases on exit
+    e->accept();
 }
 
 void MainWindow::updateWindowTitle() {
