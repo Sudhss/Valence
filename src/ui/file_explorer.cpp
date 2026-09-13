@@ -104,7 +104,7 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     openFolderBtn->setStyleSheet(QString(
         "QPushButton {"
         "  background: %1;"
-        "  color: #000000;"
+        "  color: %3;"
         "  border: none;"
         "  border-radius: 4px;"
         "  font-weight: bold;"
@@ -112,7 +112,9 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
         "QPushButton:hover {"
         "  background: %2;"
         "}"
-    ).arg(Theme::Accent.name(), Theme::AccentGlow.name()));
+    ).arg(Theme::Accent.name(),
+          Theme::Accent.lighter(115).name(),
+          Theme::OnAccent.name()));
     
     connect(openFolderBtn, &QPushButton::clicked, this, [this]() {
         emit openFolderRequested();

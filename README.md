@@ -68,16 +68,53 @@ Five clean subsystems. Each with a single responsibility.
 
 ---
 
+## Competitive Programming
+
+Valence ships a built-in judge, so the compile → run → diff loop never leaves the editor.
+
+Open it with `Ctrl+J`, or from **Run → Run Test Cases**.
+
+- Add test cases with **+**. Each holds an input and the expected output.
+- **Ctrl+Enter** saves the file, compiles it once with `g++ -O2 -std=gnu++17`,
+  then pipes every case through the binary and reports a verdict: `AC`, `WA`,
+  `TLE`, `RE` or `CE`.
+- Cards collapse to one row, so ten tests stay readable. A failing case expands
+  and scrolls its output to the first line that differs.
+- Comparison ignores trailing whitespace and trailing blank lines, and is exact
+  otherwise. Time limit is 3s per case; a runaway solution is killed, never the UI.
+- Tests are saved next to the source as `<name>.valence-tests.json`, so reopening
+  a problem restores them.
+
+`g++` must be on your `PATH`.
+
+### Keyboard
+
+| | |
+|---|---|
+| `Ctrl+J` | Judge panel |
+| `Ctrl+Enter` | Run all test cases |
+| `F5` | Build and run in the terminal |
+| `` Ctrl+` `` | Terminal |
+| `Ctrl+B` | Sidebar |
+| `Tab` / `Shift+Tab` | Indent / unindent selection |
+| `F2` | Rename in the explorer |
+| `Delete` | Move to Recycle Bin |
+
+---
+
 ## Getting Started
 
+Requires **Qt 6** (Widgets), **CMake 3.16+**, and a C++17 compiler.
+
 ```bash
-git clone https://github.com/your-repo.git
-cd valence
-mkdir build && cd build
-cmake ..
-make
-./valence
+git clone https://github.com/Sudhss/Valence.git
+cd Valence
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/mingw_64
+cmake --build build
+./build/Valence
 ```
+
+The build defaults to `Release`; pass `-DCMAKE_BUILD_TYPE=Debug` if you want symbols.
 
 ## Download
 - macOS: not sure, might do it

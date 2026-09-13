@@ -64,7 +64,8 @@ int main(int argc, char *argv[]) {
     app.setStyleSheet(dialogStyle());
 
     MainWindow window;
-    window.showMaximized();
+    // The window restores its own geometry, and maximizes itself on first run.
+    window.show();
 
     return app.exec();
 }

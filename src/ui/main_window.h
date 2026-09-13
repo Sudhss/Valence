@@ -63,4 +63,6 @@ private:
     void connectEditor(EditorWidget* editor);
     bool confirmDiscardChanges();
     void syncJudgeTarget();
+    void saveLayout() const;
+    void restoreLayout();
 };

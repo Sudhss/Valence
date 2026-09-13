@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QApplication>
 #include <QDockWidget>
+#include <QSettings>
 #include <algorithm>
 #include <QHash>
 
@@ -18,9 +19,60 @@ MainWindow::MainWindow() {
     setupUI();
     setupMenuBar();
     setupShortcuts();
+    restoreLayout();
     updateWindowTitle();
 
     // Start with empty state
+}
+
+// An editor that forgets the layout you arranged on every launch does not feel
+// finished. Geometry, panel sizes and panel visibility all persist.
+void MainWindow::saveLayout() const {
+    QSettings s;
+    s.beginGroup(QStringLiteral("layout"));
+    s.setValue(QStringLiteral("geometry"), saveGeometry());
+    s.setValue(QStringLiteral("windowState"), saveState());
+    s.setValue(QStringLiteral("horzSplitter"), horzSplitter_->saveState());
+    s.setValue(QStringLiteral("vertSplitter"), vertSplitter_->saveState());
+    s.setValue(QStringLiteral("judgeVisible"), cphDock_->isVisible());
+    s.setValue(QStringLiteral("terminalVisible"), terminal_->isVisible());
+    s.setValue(QStringLiteral("sidebarVisible"), fileExplorer_->isVisible());
+    s.setValue(QStringLiteral("lastFolder"), fileExplorer_->rootPath());
+    s.endGroup();
+}
+
+void MainWindow::restoreLayout() {
+    QSettings s;
+    s.beginGroup(QStringLiteral("layout"));
+
+    const QByteArray geometry = s.value(QStringLiteral("geometry")).toByteArray();
+    if (!geometry.isEmpty()) {
+        restoreGeometry(geometry);
+    } else {
+        // First run keeps the existing behaviour of opening maximized. Set the
+        // state rather than calling showMaximized(), so a restored geometry is
+        // not overridden on every later launch.
+        setWindowState(windowState() | Qt::WindowMaximized);
+    }
+    const QByteArray state = s.value(QStringLiteral("windowState")).toByteArray();
+    if (!state.isEmpty()) restoreState(state);
+
+    const QByteArray horz = s.value(QStringLiteral("horzSplitter")).toByteArray();
+    if (!horz.isEmpty()) horzSplitter_->restoreState(horz);
+    const QByteArray vert = s.value(QStringLiteral("vertSplitter")).toByteArray();
+    if (!vert.isEmpty()) vertSplitter_->restoreState(vert);
+
+    terminal_->setVisible(s.value(QStringLiteral("terminalVisible"), true).toBool());
+    fileExplorer_->setVisible(s.value(QStringLiteral("sidebarVisible"), true).toBool());
+    cphDock_->setVisible(s.value(QStringLiteral("judgeVisible"), false).toBool());
+
+    // Reopening where you left off is most of what "resume work" means for a
+    // contest folder. Only if it still exists.
+    const QString folder = s.value(QStringLiteral("lastFolder")).toString();
+    if (!folder.isEmpty() && QFileInfo(folder).isDir()) {
+        fileExplorer_->setRootPath(folder);
+    }
+    s.endGroup();
 }
 
 void MainWindow::setupUI() {
@@ -505,6 +557,7 @@ void MainWindow::closeEvent(QCloseEvent* e) {
         return;
     }
     cphPanel_->persist();   // don't lose the user's test cases on exit
+    saveLayout();
     e->accept();
 }
 

@@ -16,6 +16,7 @@ namespace Theme {
     inline const QColor AccentGlow(0, 255, 156, 60);      // softer glow
     inline const QColor AccentDim(0, 255, 156, 30);       // subtle hint
     inline const QColor AccentBlue(88, 166, 255);         // #58a6ff — secondary accent
+    inline const QColor OnAccent(10, 12, 14);              // text/icons drawn ON the accent
 
     // ── Text ──
     inline const QColor TextPrimary(225, 228, 232);       // #e1e4e8 — slightly softer white
