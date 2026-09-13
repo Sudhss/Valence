@@ -30,6 +30,23 @@ QStringList normalizeOutput(const QString& text) {
     return lines;
 }
 
+// Tears a process down without blocking and without orphaning it. kill() is
+// asynchronous — deleting the QProcess straight afterwards races the actual
+// termination, which Qt reports as "Destroyed while process is still running"
+// and can leave a runaway solution alive after the run has moved on. Instead,
+// detach it from the Judge and let it delete itself once it has really died.
+void disposeProcess(QProcess* proc) {
+    if (!proc) return;
+    if (proc->state() == QProcess::NotRunning) {
+        proc->deleteLater();
+        return;
+    }
+    QObject::connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                     proc, &QObject::deleteLater);
+    QObject::connect(proc, &QProcess::errorOccurred, proc, &QObject::deleteLater);
+    proc->kill();
+}
+
 } // namespace
 
 struct Judge::Impl {
@@ -58,20 +75,26 @@ Judge::Judge(QObject* parent) : QObject(parent), d(new Impl) {
 }
 
 Judge::~Judge() {
-    // Never leave an orphaned child process behind. This is the one place a
-    // bounded block is acceptable — we are tearing down, not drawing.
-    auto reap = [](QProcess*& p) {
-        if (!p) return;
-        p->disconnect();
-        if (p->state() != QProcess::NotRunning) {
-            p->kill();
-            p->waitForFinished(500);
+    // Never leave an orphaned child process behind. Sweep every QProcess we
+    // still own, not just the two we track: a case that timed out has already
+    // been detached and is sitting on a pending deleteLater, and destroying it
+    // mid-kill is what produces "Destroyed while process is still running".
+    // This is the one place a bounded block is acceptable — we are tearing
+    // down, not drawing.
+    d->compileProc = nullptr;
+    d->runProc = nullptr;
+    const QList<QProcess*> children = findChildren<QProcess*>();
+    for (QProcess* proc : children) {
+        proc->disconnect();
+        if (proc->state() != QProcess::NotRunning) {
+            proc->kill();
+            proc->waitForFinished(500);
         }
-        delete p;
-        p = nullptr;
-    };
-    reap(d->compileProc);
-    reap(d->runProc);
+        delete proc;
+    }
+
+    // Only now can the build directory go: the binaries in it are no longer
+    // locked by a live process.
     delete d->tempDir;
     delete d;
 }
@@ -162,7 +185,7 @@ void Judge::run(const QString& sourcePath, const QVector<TestCase>& cases) {
         if (err != QProcess::FailedToStart) return;
         d->compileProc = nullptr;
         proc->disconnect(this);
-        proc->deleteLater();
+        disposeProcess(proc);
         d->busy = false;
         emit failed(tr("Could not start %1.").arg(d->compiler));
     });
@@ -172,7 +195,7 @@ void Judge::run(const QString& sourcePath, const QVector<TestCase>& cases) {
         const QString output = QString::fromLocal8Bit(proc->readAll());
         d->compileProc = nullptr;
         proc->disconnect(this);
-        proc->deleteLater();
+        disposeProcess(proc);
 
         const bool ok = (exitCode == 0);
         emit compileFinished(ok, output);
@@ -290,9 +313,7 @@ void Judge::finishCase(Verdict verdict, int exitCode, const QString& errorText) 
     // NEXT case — the single nastiest bug lurking in this file.
     if (QProcess* proc = d->runProc) {
         d->runProc = nullptr;
-        proc->disconnect(this);
-        if (proc->state() != QProcess::NotRunning) proc->kill();
-        proc->deleteLater();
+        disposeProcess(proc);
     }
 
     emit caseFinished(index, tc);
@@ -311,8 +332,7 @@ void Judge::cancel() {
         QProcess* proc = p;
         p = nullptr;
         proc->disconnect(this);
-        if (proc->state() != QProcess::NotRunning) proc->kill();
-        proc->deleteLater();
+        disposeProcess(proc);
     };
     stop(d->compileProc);
     stop(d->runProc);

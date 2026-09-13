@@ -2,6 +2,8 @@
 #include <QWidget>
 #include <QFont>
 #include <QTimer>
+#include <QRect>
+#include <QVariantAnimation>
 #include "../core/text_buffer.h"
 #include "../core/undo_manager.h"
 #include "../core/selection.h"
@@ -52,6 +54,7 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -67,9 +70,12 @@ private:
     Selection selection_;
     CppHighlighter highlighter_;
 
-    // Block comment state per line
+    // Block comment state at the START of each line. Maintained incrementally:
+    // a full rescan on every keystroke is O(file) and shows up as lag well
+    // before a file gets big.
     std::vector<bool> blockCommentState_;
-    void rebuildCommentState();
+    void rebuildCommentState(int fromRow);
+    void rebuildCommentStateFull();
 
     // Rendering
     QFont font_;
@@ -77,12 +83,22 @@ private:
     int charHeight_;
     int ascent_;
     int scrollY_;
+    int scrollX_ = 0;
     int gutterWidth_;
     int gutterPadding_;
+    // True when the font really is fixed-pitch, which lets a whole token be
+    // drawn in one call instead of a character at a time.
+    bool monospaceExact_ = false;
 
     // Cursor
     QTimer* blinkTimer_;
     bool cursorVisible_;
+
+    // Smooth scrolling. scrollTarget_ is where the view is heading, so a second
+    // wheel tick mid-flight retargets rather than restarting from where the
+    // animation happens to be.
+    QVariantAnimation* scrollAnim_ = nullptr;
+    int scrollTarget_ = 0;
 
     // File
     QString filePath_;
@@ -142,7 +158,12 @@ private:
 
     // Scroll
     int maxScrollY() const;
+    int maxScrollX() const;
     void clampScroll();
+    void animateScrollTo(int targetY);
+    void jumpScrollTo(int y);              // instant; keeps the animation in sync
+    QRect cursorRect() const;
+    int codeLeft() const { return gutterWidth_; }
 
     // Paint helpers
     void paintGutter(QPainter& p, int startRow, int endRow);

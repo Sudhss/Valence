@@ -17,6 +17,14 @@ EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
     charHeight_ = fm.height();
     ascent_ = fm.ascent();
 
+    // Verify the font really is fixed-pitch before trusting a whole-token draw.
+    // If a fallback font sneaks in, glyph advances stop matching the grid and
+    // the caret drifts away from the text — the bug the per-character path was
+    // originally written to fix.
+    monospaceExact_ = charWidth_ > 0 &&
+        fm.horizontalAdvance(QStringLiteral("MMMMMMMMMM")) == 10 * charWidth_ &&
+        fm.horizontalAdvance(QStringLiteral("iiiiiiiiii")) == 10 * charWidth_;
+
     scrollY_ = 0;
     gutterPadding_ = 20;
     updateGutterWidth();
@@ -28,11 +36,21 @@ EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
     connect(blinkTimer_, &QTimer::timeout, this, &EditorWidget::toggleCursorBlink);
     blinkTimer_->start(500);
 
+    scrollAnim_ = new QVariantAnimation(this);
+    scrollAnim_->setDuration(140);
+    scrollAnim_->setEasingCurve(QEasingCurve::OutCubic);
+    connect(scrollAnim_, &QVariantAnimation::valueChanged, this,
+            [this](const QVariant& v) {
+        scrollY_ = v.toInt();
+        clampScroll();
+        update();
+    });
+
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setCursor(Qt::IBeamCursor);
 
-    rebuildCommentState();
+    rebuildCommentStateFull();
 }
 
 // ── File Operations ──
@@ -46,7 +64,7 @@ bool EditorWidget::openFile(const QString& path) {
     undoManager_.clear();
     setModified(false);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentStateFull();
     update();
     return true;
 }
@@ -99,20 +117,56 @@ void EditorWidget::updateGutterWidth() {
 }
 
 void EditorWidget::resetCursorBlink() {
+    const QRect before = cursorRect();
     cursorVisible_ = true;
-    blinkTimer_->start(500);
+    blinkTimer_->start(500);   // restart, so the caret stays solid while typing
+    update(before);
 }
 
 void EditorWidget::toggleCursorBlink() {
     cursorVisible_ = !cursorVisible_;
-    // Only repaint the cursor region for performance
-    update();
+    // Repaint the caret alone. Repainting the whole widget twice a second
+    // re-tokenised and re-drew every visible line, forever.
+    update(cursorRect());
 }
 
-void EditorWidget::rebuildCommentState() {
-    blockCommentState_.resize(buffer_.lineCount(), false);
+void EditorWidget::rebuildCommentStateFull() {
+    const int lines = buffer_.lineCount();
+    blockCommentState_.assign(lines, false);
     bool inComment = false;
-    for (int i = 0; i < buffer_.lineCount(); i++) {
+    for (int i = 0; i < lines; i++) {
+        blockCommentState_[i] = inComment;
+        highlighter_.tokenize(buffer_.line(i), inComment);
+    }
+}
+
+void EditorWidget::rebuildCommentState(int fromRow) {
+    const int lines = buffer_.lineCount();
+    if (lines == 0) { blockCommentState_.clear(); return; }
+
+    const int oldSize = static_cast<int>(blockCommentState_.size());
+    const int delta = lines - oldSize;
+    fromRow = std::clamp(fromRow, 0, lines - 1);
+
+    // Keep the cache index-aligned with the buffer when the edit added or
+    // removed lines, so the convergence test below compares like with like.
+    if (delta > 0) {
+        blockCommentState_.insert(blockCommentState_.begin() + std::min(fromRow, oldSize),
+                                  delta, false);
+    } else if (delta < 0) {
+        const int at = std::min(fromRow, lines);
+        blockCommentState_.erase(blockCommentState_.begin() + at,
+                                 blockCommentState_.begin() + at - delta);
+    }
+
+    // Rows before fromRow are untouched, so the cached state at fromRow is
+    // still whatever the previous line left behind.
+    bool inComment = blockCommentState_[fromRow];
+    const int settled = fromRow + std::abs(delta);   // shifted entries aren't trustworthy yet
+    for (int i = fromRow; i < lines; i++) {
+        // Once the recomputed state matches the cached one, every later line is
+        // provably unchanged and the scan can stop.
+        if (i > settled && blockCommentState_[i] == inComment) return;
         blockCommentState_[i] = inComment;
         highlighter_.tokenize(buffer_.line(i), inComment);
     }
@@ -125,12 +179,14 @@ int EditorWidget::rowFromY(int y) const {
 }
 
 int EditorWidget::colFromX(int x, int row) const {
-    int col = (x - gutterWidth_) / charWidth_;
+    // Round to the nearest boundary so a click on the right half of a glyph
+    // lands after it, the way every other editor behaves.
+    int col = (x - gutterWidth_ + scrollX_ + charWidth_ / 2) / charWidth_;
     return std::clamp(col, 0, buffer_.lineLength(row));
 }
 
 int EditorWidget::xFromCol(int col) const {
-    return gutterWidth_ + col * charWidth_;
+    return gutterWidth_ + col * charWidth_ - scrollX_;
 }
 
 int EditorWidget::yFromRow(int row) const {
@@ -142,16 +198,68 @@ int EditorWidget::maxScrollY() const {
     return std::max(0, totalHeight - height() + charHeight_);
 }
 
+int EditorWidget::maxScrollX() const {
+    // Measuring every line would be O(file) on each scroll, so bound the
+    // extent by the widest line currently on screen plus the caret, which is
+    // all the user can actually reach from here.
+    int widest = cursor_.col;
+    const int first = std::max(0, scrollY_ / charHeight_);
+    const int last = std::min(first + height() / charHeight_ + 1, buffer_.lineCount() - 1);
+    for (int row = first; row <= last; row++) widest = std::max(widest, buffer_.lineLength(row));
+
+    const int viewport = std::max(1, width() - gutterWidth_);
+    return std::max(0, (widest + 2) * charWidth_ - viewport);
+}
+
 void EditorWidget::clampScroll() {
     scrollY_ = std::clamp(scrollY_, 0, maxScrollY());
+    scrollX_ = std::clamp(scrollX_, 0, maxScrollX());
+}
+
+QRect EditorWidget::cursorRect() const {
+    // Slightly wider than the caret so the glow is included.
+    return QRect(xFromCol(cursor_.col) - 3, yFromRow(cursor_.row), 8, charHeight_);
+}
+
+void EditorWidget::animateScrollTo(int targetY) {
+    scrollTarget_ = std::clamp(targetY, 0, maxScrollY());
+    if (scrollTarget_ == scrollY_) return;
+
+    // Retarget an in-flight animation rather than restarting it from wherever
+    // it happens to be, so consecutive wheel ticks accumulate smoothly.
+    scrollAnim_->stop();
+    scrollAnim_->setStartValue(scrollY_);
+    scrollAnim_->setEndValue(scrollTarget_);
+    scrollAnim_->start();
+}
+
+void EditorWidget::jumpScrollTo(int y) {
+    scrollAnim_->stop();
+    scrollY_ = std::clamp(y, 0, maxScrollY());
+    scrollTarget_ = scrollY_;
 }
 
 void EditorWidget::ensureCursorVisible() {
+    // Keyboard navigation must be instant — animating the caret into view
+    // would make the editor feel like it is lagging behind the keystroke.
     int cy = cursor_.row * charHeight_;
-    if (cy < scrollY_) {
-        scrollY_ = cy;
-    } else if (cy + charHeight_ > scrollY_ + height()) {
-        scrollY_ = cy + charHeight_ - height();
+    int y = scrollY_;
+    if (cy < y) {
+        y = cy;
+    } else if (cy + charHeight_ > y + height()) {
+        y = cy + charHeight_ - height();
+    }
+    if (y != scrollY_) jumpScrollTo(y);
+
+    // Horizontal: keep a few columns of context around the caret.
+    const int margin = 4 * charWidth_;
+    const int cx = gutterWidth_ + cursor_.col * charWidth_;
+    const int viewLeft = gutterWidth_ + scrollX_;
+    const int viewRight = width();
+    if (cx - margin < viewLeft) {
+        scrollX_ = std::max(0, cursor_.col * charWidth_ - margin);
+    } else if (cx - scrollX_ + margin > viewRight) {
+        scrollX_ = cursor_.col * charWidth_ + margin - (viewRight - gutterWidth_);
     }
     clampScroll();
 }
@@ -181,7 +289,7 @@ void EditorWidget::deleteSelection() {
     selection_.clear();
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentState(start.row);
 }
 
 std::string EditorWidget::getSelectedText() const {
@@ -462,7 +570,7 @@ void EditorWidget::handleChar(char ch) {
     }
 
     setModified(true);
-    rebuildCommentState();
+    rebuildCommentState(cursor_.row);
 }
 
 void EditorWidget::handleBackspace(bool ctrl) {
@@ -510,7 +618,7 @@ void EditorWidget::handleBackspace(bool ctrl) {
                 cursor_.col--;
                 setModified(true);
                 updateGutterWidth();
-                rebuildCommentState();
+                rebuildCommentState(cursor_.row);
                 return;
             }
 
@@ -530,7 +638,7 @@ void EditorWidget::handleBackspace(bool ctrl) {
 
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentState(cursor_.row);
 }
 
 void EditorWidget::handleDelete() {
@@ -554,12 +662,13 @@ void EditorWidget::handleDelete() {
 
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentState(cursor_.row);
 }
 
 void EditorWidget::handleEnter() {
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
+    const int startRow = cursor_.row;
     std::string indent = buffer_.getLeadingWhitespace(cursor_.row);
 
     // Look at the last real character before the cursor, not the character
@@ -603,7 +712,7 @@ void EditorWidget::handleEnter() {
 
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentState(startRow);
 }
 
 void EditorWidget::handleTab(bool shift) {
@@ -618,14 +727,14 @@ void EditorWidget::handleTab(bool shift) {
             indentBlock(start.row, lastRow, shift);
             setModified(true);
             updateGutterWidth();
-            rebuildCommentState();
+            rebuildCommentState(start.row);
             return;                           // selection survives, so Tab repeats
         }
         deleteSelection();                    // single-line selection: replace it
     } else if (shift) {
         indentBlock(cursor_.row, cursor_.row, true);
         setModified(true);
-        rebuildCommentState();
+        rebuildCommentState(cursor_.row);
         return;
     }
 
@@ -636,7 +745,7 @@ void EditorWidget::handleTab(bool shift) {
     undoManager_.recordInsert(tabStart, spaces);
     undoManager_.forceNewGroup();
     setModified(true);
-    rebuildCommentState();
+    rebuildCommentState(cursor_.row);
 }
 
 void EditorWidget::movePage(int direction, bool shift) {
@@ -669,6 +778,7 @@ void EditorWidget::paste() {
 
     if (selection_.hasSelection(cursor_)) deleteSelection();
 
+    const int pasteRow = cursor_.row;
     std::string text = clipText.toStdString();
     undoManager_.recordInsert(cursor_, text);
     undoManager_.forceNewGroup();
@@ -678,7 +788,7 @@ void EditorWidget::paste() {
 
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentState(pasteRow);
 }
 
 void EditorWidget::selectAll() {
@@ -734,7 +844,7 @@ void EditorWidget::performUndo() {
     selection_.clear();
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentStateFull();
 }
 
 void EditorWidget::performRedo() {
@@ -760,7 +870,7 @@ void EditorWidget::performRedo() {
     selection_.clear();
     setModified(true);
     updateGutterWidth();
-    rebuildCommentState();
+    rebuildCommentStateFull();
 }
 
 // ── Input Handling ──
@@ -851,52 +961,105 @@ void EditorWidget::mousePressEvent(QMouseEvent* e) {
     }
 }
 
-void EditorWidget::mouseMoveEvent(QMouseEvent* e) {
-    if (e->buttons() & Qt::LeftButton && e->position().x() > gutterWidth_) {
-        int row = rowFromY((int)e->position().y());
-        int col = colFromX((int)e->position().x(), row);
-        cursor_ = {row, col};
-        ensureCursorVisible();
-        emit cursorPositionChanged(cursor_.row, cursor_.col);
-        update();
+void EditorWidget::mouseDoubleClickEvent(QMouseEvent* e) {
+    if (e->button() != Qt::LeftButton) return;
+
+    const int row = rowFromY((int)e->position().y());
+    const int col = colFromX((int)e->position().x(), row);
+
+    if (e->type() == QEvent::MouseButtonDblClick) {
+        const int left = buffer_.findWordBoundaryLeft(row, std::min(col + 1, buffer_.lineLength(row)));
+        const int right = buffer_.findWordBoundaryRight(row, col);
+        if (right > left) {
+            setSelection(row, left, row, right);
+            return;
+        }
     }
+    cursor_ = {row, col};
+    selection_.clear();
+    resetCursorBlink();
+    emit cursorPositionChanged(cursor_.row, cursor_.col);
+    update();
+}
+
+void EditorWidget::mouseMoveEvent(QMouseEvent* e) {
+    if (!(e->buttons() & Qt::LeftButton)) return;
+
+    const int y = (int)e->position().y();
+    int row = rowFromY(y);
+    int col = colFromX((int)e->position().x(), row);
+    cursor_ = {row, col};
+
+    // Dragging past the top or bottom edge keeps extending the selection
+    // instead of stopping dead at the last visible line.
+    if (y < 0) {
+        jumpScrollTo(scrollY_ - charHeight_);
+    } else if (y > height()) {
+        jumpScrollTo(scrollY_ + charHeight_);
+    }
+
+    ensureCursorVisible();
+    resetCursorBlink();
+    emit cursorPositionChanged(cursor_.row, cursor_.col);
+    update();
 }
 
 void EditorWidget::wheelEvent(QWheelEvent* e) {
-    int delta = e->angleDelta().y();
-    int lines = 3;
-    scrollY_ -= (delta / 120) * lines * charHeight_;
-    clampScroll();
-    update();
+    const QPoint angle = e->angleDelta();
+
+    // Shift+wheel pans horizontally, as does a real horizontal wheel.
+    if ((e->modifiers() & Qt::ShiftModifier) || angle.x() != 0) {
+        const int delta = (angle.x() != 0) ? angle.x() : angle.y();
+        scrollX_ -= (delta * 3 * charWidth_) / 120;
+        clampScroll();
+        update();
+        e->accept();
+        return;
+    }
+
+    if (angle.y() == 0) { QWidget::wheelEvent(e); return; }
+
+    const int step = (angle.y() * 3 * charHeight_) / 120;
+    animateScrollTo(scrollTarget_ - step);
+    e->accept();
 }
 
 void EditorWidget::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
     clampScroll();
+    scrollTarget_ = scrollY_;   // a resize can clamp the view out from under an animation
 }
 
 // ── Paint ──
 
-void EditorWidget::paintEvent(QPaintEvent*) {
+void EditorWidget::paintEvent(QPaintEvent* event) {
     QPainter p(this);
     p.setRenderHint(QPainter::TextAntialiasing);
     p.setFont(font_);
 
-    // Background
-    p.fillRect(rect(), Theme::EditorBg);
+    // Only touch what was invalidated. A caret blink then costs one small
+    // rectangle instead of the entire viewport.
+    const QRect clip = event->rect();
+    p.fillRect(clip, Theme::EditorBg);
 
-    // Visible rows
-    int startRow = scrollY_ / charHeight_;
-    int endRow = std::min(startRow + height() / charHeight_ + 2, buffer_.lineCount());
+    int startRow = std::max(0, (scrollY_ + clip.top()) / charHeight_);
+    int endRow = std::min((scrollY_ + clip.bottom()) / charHeight_ + 1, buffer_.lineCount());
 
-    paintGutter(p, startRow, endRow);
+    // Code is clipped to its own column so horizontally scrolled text cannot
+    // bleed underneath the gutter.
+    p.save();
+    p.setClipRect(QRect(gutterWidth_, 0, std::max(0, width() - gutterWidth_), height()), Qt::IntersectClip);
     paintCode(p, startRow, endRow);
     paintCursor(p);
+    p.restore();
+
+    paintGutter(p, startRow, endRow);
 }
 
 void EditorWidget::paintGutter(QPainter& p, int startRow, int endRow) {
     // Gutter background
     p.fillRect(0, 0, gutterWidth_, height(), Theme::SidebarBg);
+    p.setPen(Theme::Border);
 
     // Gutter border
     p.setPen(Theme::Border);
@@ -935,7 +1098,19 @@ void EditorWidget::paintCode(QPainter& p, int startRow, int endRow) {
         const std::string& lineStr = buffer_.line(row);
         auto tokens = highlighter_.tokenize(lineStr, inComment);
 
+        // Build the line's QString once. The previous code allocated a
+        // std::string AND a QString per character per frame — roughly 14,000
+        // allocations for a full viewport, every repaint.
+        // Latin-1 keeps a strict one-byte-one-column mapping, which is what the
+        // caret arithmetic throughout this class assumes.
+        const QString lineText = QString::fromLatin1(lineStr.data(), (int)lineStr.size());
+
+        // Skip tokens scrolled off either edge.
+        const int firstCol = std::max(0, scrollX_ / charWidth_ - 1);
+        const int lastCol = firstCol + (width() - gutterWidth_) / charWidth_ + 2;
+
         for (const auto& tok : tokens) {
+            if (tok.start + tok.length < firstCol || tok.start > lastCol) continue;
             QColor color;
             switch (tok.type) {
             case TokenType::Keyword:      color = Theme::SynKeyword; break;
@@ -950,13 +1125,19 @@ void EditorWidget::paintCode(QPainter& p, int startRow, int endRow) {
             }
 
             p.setPen(color);
-            // Draw character by character to enforce a strict monospace grid.
-            // This prevents "ghost characters" or cursor drift if the system
-            // falls back to a proportional font or applies kerning.
-            for (int i = 0; i < tok.length; i++) {
-                int x = gutterWidth_ + (tok.start + i) * charWidth_;
-                QString ch = QString::fromStdString(lineStr.substr(tok.start + i, 1));
-                p.drawText(x, y + ascent_, ch);
+            if (monospaceExact_) {
+                // The font's advances were verified against the grid at
+                // construction, so the whole token can go out in one call.
+                p.drawText(xFromCol(tok.start), y + ascent_,
+                           lineText.mid(tok.start, tok.length));
+            } else {
+                // A fallback font is in play and its advances do not match the
+                // grid. Place each glyph by hand instead, which is slower but
+                // keeps text and caret aligned — the "ghost character" bug.
+                for (int i = 0; i < tok.length; i++) {
+                    p.drawText(xFromCol(tok.start + i), y + ascent_,
+                               lineText.mid(tok.start + i, 1));
+                }
             }
         }
     }
