@@ -1,6 +1,7 @@
 #include "tab_widget.h"
 #include "../theme/theme.h"
 #include <QVBoxLayout>
+#include <QMouseEvent>
 
 TabWidget::TabWidget(QWidget* parent) : QWidget(parent) {
     stack_ = new QStackedWidget(this);
@@ -27,8 +28,27 @@ TabWidget::TabWidget(QWidget* parent) : QWidget(parent) {
     connect(tabs_, &QTabWidget::currentChanged, this, &TabWidget::currentChanged);
     connect(tabs_, &QTabWidget::tabCloseRequested, this, &TabWidget::tabCloseRequested);
 
+    // Middle-click to close, which is muscle memory from every browser and
+    // every other editor.
+    tabs_->tabBar()->installEventFilter(this);
+    tabs_->tabBar()->setElideMode(Qt::ElideMiddle);   // keep the extension visible
+
     applyStyle();
     updateStackVisibility();
+}
+
+bool TabWidget::eventFilter(QObject* obj, QEvent* e) {
+    if (obj == tabs_->tabBar() && e->type() == QEvent::MouseButtonRelease) {
+        auto* me = static_cast<QMouseEvent*>(e);
+        if (me->button() == Qt::MiddleButton) {
+            const int idx = tabs_->tabBar()->tabAt(me->position().toPoint());
+            if (idx >= 0) {
+                emit tabCloseRequested(idx);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, e);
 }
 
 void TabWidget::updateStackVisibility() {
@@ -87,6 +107,7 @@ void TabWidget::applyStyle() {
 
 int TabWidget::addEditor(EditorWidget* editor, const QString& label) {
     int idx = tabs_->addTab(editor, label);
+    tabs_->setTabToolTip(idx, editor->filePath().isEmpty() ? label : editor->filePath());
     tabs_->setCurrentIndex(idx);
     updateStackVisibility();
     return idx;
@@ -118,6 +139,8 @@ void TabWidget::updateTabLabel(int index) {
     QString label = editor->fileName();
     if (editor->isModified()) label += " ●";
     tabs_->setTabText(index, label);
+    // The name alone is ambiguous once two problems are both called main.cpp.
+    tabs_->setTabToolTip(index, editor->filePath().isEmpty() ? label : editor->filePath());
 }
 
 void TabWidget::closeTab(int index) {

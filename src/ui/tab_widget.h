@@ -23,6 +23,9 @@ public:
     void updateTabLabel(int index);
     void closeTab(int index);
 
+protected:
+    bool eventFilter(QObject* obj, QEvent* e) override;
+
 signals:
     void currentChanged(int index);
     void tabCloseRequested(int index);

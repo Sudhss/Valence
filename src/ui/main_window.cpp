@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <algorithm>
+#include <QHash>
 
 MainWindow::MainWindow() {
     setupUI();
@@ -147,9 +148,15 @@ void MainWindow::setupUI() {
     connect(fileExplorer_, &FileExplorer::fileCreatedWithBoilerplate, this, &MainWindow::onFileCreatedWithBoilerplate);
     connect(fileExplorer_, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
 
+    // A file deleted or renamed on disk must not leave a tab pointing at a path
+    // that no longer exists — saving such a tab would silently recreate the file.
+    connect(fileExplorer_, &FileExplorer::fileDeleted, this, &MainWindow::onFileDeleted);
+    connect(fileExplorer_, &FileExplorer::fileRenamed, this, &MainWindow::onFileRenamed);
+
     // The panel asks us to flush the editor to disk before it compiles. This is
     // a direct connection, so the save completes before runAll() reads the file.
     connect(cphPanel_, &CphPanel::saveBeforeRunRequested, this, &MainWindow::saveFile);
+    connect(cphPanel_, &CphPanel::statusMessage, statusBar_, &StatusBar::setMessage);
 }
 
 void MainWindow::setupMenuBar() {
@@ -366,6 +373,30 @@ void MainWindow::onFileCreatedWithBoilerplate(const QString& path) {
     }
 }
 
+void MainWindow::onFileDeleted(const QString& path) {
+    const int idx = tabWidget_->findByFilePath(path);
+    if (idx < 0) return;
+
+    // The file is already gone, so there is nothing to offer to save. Drop the
+    // tab without the usual unsaved-changes prompt, which would only offer to
+    // write the file back.
+    tabWidget_->closeTab(idx);
+    syncJudgeTarget();
+    updateWindowTitle();
+}
+
+void MainWindow::onFileRenamed(const QString& oldPath, const QString& newPath) {
+    const int idx = tabWidget_->findByFilePath(oldPath);
+    if (idx < 0) return;
+
+    if (auto* editor = tabWidget_->editorAt(idx)) {
+        editor->setFilePath(newPath);
+        tabWidget_->updateTabLabel(idx);
+    }
+    syncJudgeTarget();
+    updateWindowTitle();
+}
+
 void MainWindow::onCursorPositionChanged(int row, int col) {
     statusBar_->setCursorPosition(row, col);
 }
@@ -418,6 +449,24 @@ void MainWindow::toggleJudgePanel() {
 void MainWindow::syncJudgeTarget() {
     auto* editor = tabWidget_->currentEditor();
     cphPanel_->setTargetFile(editor ? editor->filePath() : QString());
+
+    // Reporting "C++" for a .txt file is a small lie the status bar was telling
+    // on every tab.
+    static const QHash<QString, QString> languages = {
+        {"cpp", "C++"}, {"cc", "C++"}, {"cxx", "C++"}, {"c++", "C++"},
+        {"h", "C++"}, {"hpp", "C++"}, {"hh", "C++"},
+        {"c", "C"}, {"py", "Python"}, {"java", "Java"}, {"rs", "Rust"},
+        {"js", "JavaScript"}, {"ts", "TypeScript"}, {"json", "JSON"},
+        {"md", "Markdown"}, {"txt", "Text"}, {"in", "Text"}, {"out", "Text"},
+    };
+    QString lang = "Plain";
+    if (editor && !editor->filePath().isEmpty()) {
+        const QString ext = QFileInfo(editor->filePath()).suffix().toLower();
+        lang = languages.value(ext, ext.isEmpty() ? QStringLiteral("Plain") : ext.toUpper());
+    } else if (editor) {
+        lang = "C++";        // an unsaved buffer is a new solution
+    }
+    statusBar_->setLanguage(lang);
 }
 
 // Returns false if the user cancelled — the caller must then abort whatever it

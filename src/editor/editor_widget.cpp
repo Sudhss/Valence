@@ -82,6 +82,7 @@ bool EditorWidget::saveFileAs(const QString& path) {
 }
 
 QString EditorWidget::filePath() const { return filePath_; }
+void EditorWidget::setFilePath(const QString& path) { filePath_ = path; }
 bool EditorWidget::isModified() const { return modified_; }
 QString EditorWidget::fileName() const {
     if (filePath_.isEmpty()) return "untitled";

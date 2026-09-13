@@ -20,6 +20,9 @@ public:
     bool saveFileAs(const QString& path);
 
     QString filePath() const;
+    // Follows an on-disk rename without touching the buffer or the
+    // modified flag — the content did not change, only its name.
+    void setFilePath(const QString& path);
     bool isModified() const;
     QString fileName() const;
 

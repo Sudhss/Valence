@@ -9,6 +9,76 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QTimer>
+#include <QMenu>
+#include <QAction>
+#include <QLineEdit>
+#include <QStyledItemDelegate>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QProcess>
+#include <QKeyEvent>
+
+namespace {
+
+// Names Windows will not accept as a file name. Checked as the user types so
+// the rename cannot silently fail with no explanation.
+bool isReservedName(const QString& name) {
+    static const QStringList reserved = {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
+        "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"};
+    const QString stem = name.section(QLatin1Char('.'), 0, 0).toUpper();
+    return reserved.contains(stem);
+}
+
+// The inline rename editor. QFileSystemModel supplies a bare QLineEdit that
+// inherits nothing from the theme and accepts characters the filesystem will
+// reject, so both are fixed here.
+class NameEditDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option,
+                          const QModelIndex& index) const override {
+        QWidget* w = QStyledItemDelegate::createEditor(parent, option, index);
+        if (auto* edit = qobject_cast<QLineEdit*>(w)) {
+            // Allow the empty string through as intermediate, so the user can
+            // clear the field and retype.
+            static const QRegularExpression allowed(
+                QStringLiteral(R"(^[^<>:"/\\|?*\x{00}-\x{1F}]{0,255}$)"));
+            edit->setValidator(new QRegularExpressionValidator(allowed, edit));
+            edit->setFrame(false);
+            edit->setStyleSheet(QString(
+                "QLineEdit { background: %1; color: %2; border: 1px solid %3;"
+                "  border-radius: 3px; padding: 1px 3px; selection-background-color: %4; }"
+            ).arg(Theme::EditorBg.name(),
+                  Theme::TextPrimary.name(),
+                  Theme::Accent.name(),
+                  Theme::SelectionBg.name(QColor::HexArgb)));
+        }
+        return w;
+    }
+
+    void setModelData(QWidget* editor, QAbstractItemModel* model,
+                      const QModelIndex& index) const override {
+        auto* edit = qobject_cast<QLineEdit*>(editor);
+        if (edit) {
+            const QString name = edit->text().trimmed();
+            // Committing one of these produces an opaque filesystem error, so
+            // discard the edit and leave the original name in place instead.
+            if (name.isEmpty() || isReservedName(name) || name.endsWith(QLatin1Char('.'))) {
+                return;
+            }
+        }
+        QStyledItemDelegate::setModelData(editor, model, index);
+    }
+};
+
+} // namespace
 
 FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
@@ -66,14 +136,19 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     tree_->setAnimated(true);
     tree_->setIndentation(16);
     tree_->setFont(Theme::sidebarFont());
-    tree_->setEditTriggers(QAbstractItemView::EditKeyPressed);
+    tree_->setEditTriggers(QAbstractItemView::EditKeyPressed);   // F2
     tree_->setSelectionMode(QAbstractItemView::SingleSelection);
     tree_->setDragEnabled(false);
     tree_->setFocusPolicy(Qt::StrongFocus);
+    tree_->setItemDelegate(new NameEditDelegate(tree_));
+    tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    tree_->installEventFilter(this);
 
     stack_->addWidget(tree_); // Index 1
 
     layout->addWidget(stack_);
+
+    connect(tree_, &QTreeView::customContextMenuRequested, this, &FileExplorer::showContextMenu);
 
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex& index) {
         QString path = model_->filePath(index);
@@ -83,6 +158,12 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     });
     
     // Auto-open newly created files after they are renamed, and inject boilerplate if needed
+    connect(model_, &QFileSystemModel::fileRenamed, this,
+            [this](const QString& path, const QString& oldName, const QString& newName) {
+        // Anything open in a tab under the old name has to follow it.
+        emit fileRenamed(QDir(path).filePath(oldName), QDir(path).filePath(newName));
+    });
+
     connect(model_, &QFileSystemModel::fileRenamed, this, [this](const QString& path, const QString& oldName, const QString& newName) {
         if (!pendingOpenAfterRename_.isEmpty()) {
             QFileInfo fi(pendingOpenAfterRename_);
@@ -361,4 +442,171 @@ void FileExplorer::onRefresh() {
 
 void FileExplorer::onCollapseAll() {
     tree_->collapseAll();
+}
+
+QString FileExplorer::selectedPath() const {
+    const QModelIndex idx = tree_->currentIndex();
+    return idx.isValid() ? model_->filePath(idx) : QString();
+}
+
+void FileExplorer::onDelete() {
+    const QString path = selectedPath();
+    if (path.isEmpty()) return;
+
+    // Deleting the folder you have open would leave the tree pointing at
+    // nothing. Refuse rather than half-work.
+    if (QFileInfo(path) == QFileInfo(rootPath_)) {
+        QMessageBox::information(this, tr("Delete"),
+            tr("This is the folder you currently have open. Close it first."));
+        return;
+    }
+
+    const QFileInfo fi(path);
+    const bool isDir = fi.isDir();
+
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Delete"));
+    box.setIcon(QMessageBox::NoIcon);
+    box.setText(tr("Move %1 to the Recycle Bin?").arg(fi.fileName()));
+    box.setInformativeText(isDir ? tr("Everything inside it goes too.") : QString());
+    box.setStandardButtons(QMessageBox::Cancel | QMessageBox::Yes);
+    box.setDefaultButton(QMessageBox::Cancel);
+    if (box.exec() != QMessageBox::Yes) return;
+
+    // Prefer the Recycle Bin: an accidental delete of a solution mid-contest
+    // should be recoverable.
+    bool ok = QFile::moveToTrash(path);
+    bool permanent = false;
+    if (!ok) {
+        QMessageBox fallback(this);
+        fallback.setWindowTitle(tr("Delete"));
+        fallback.setIcon(QMessageBox::NoIcon);
+        fallback.setText(tr("%1 could not be moved to the Recycle Bin.").arg(fi.fileName()));
+        fallback.setInformativeText(tr("Delete it permanently instead? This cannot be undone."));
+        fallback.setStandardButtons(QMessageBox::Cancel | QMessageBox::Yes);
+        fallback.setDefaultButton(QMessageBox::Cancel);
+        if (fallback.exec() != QMessageBox::Yes) return;
+
+        ok = isDir ? QDir(path).removeRecursively() : QFile::remove(path);
+        permanent = true;
+    }
+
+    if (!ok) {
+        QMessageBox::warning(this, tr("Delete"),
+            tr("Could not delete %1. It may be open in another program.").arg(fi.fileName()));
+        return;
+    }
+
+    Q_UNUSED(permanent);
+    emit fileDeleted(QDir::fromNativeSeparators(fi.absoluteFilePath()));
+}
+
+void FileExplorer::onRename() {
+    const QModelIndex idx = tree_->currentIndex();
+    if (!idx.isValid()) return;
+    if (QFileInfo(model_->filePath(idx)) == QFileInfo(rootPath_)) return;
+    tree_->edit(idx);          // the delegate validates and themes the editor
+}
+
+void FileExplorer::onDuplicate() {
+    const QString path = selectedPath();
+    if (path.isEmpty()) return;
+
+    const QFileInfo fi(path);
+    if (fi.isDir()) {
+        QMessageBox::information(this, tr("Duplicate"), tr("Only files can be duplicated."));
+        return;
+    }
+
+    const QString suffix = fi.completeSuffix().isEmpty()
+                               ? QString() : QLatin1Char('.') + fi.completeSuffix();
+    QString candidate;
+    int n = 1;
+    do {
+        candidate = fi.absolutePath() + QLatin1Char('/') + fi.baseName() +
+                    QStringLiteral(" copy") + (n > 1 ? QString::number(n) : QString()) + suffix;
+        n++;
+    } while (QFile::exists(candidate) && n < 1000);
+
+    if (!QFile::copy(path, candidate)) {
+        QMessageBox::warning(this, tr("Duplicate"), tr("Could not duplicate %1.").arg(fi.fileName()));
+    }
+}
+
+void FileExplorer::onCopyPath() {
+    const QString path = selectedPath();
+    if (!path.isEmpty()) {
+        QGuiApplication::clipboard()->setText(QDir::toNativeSeparators(path));
+    }
+}
+
+void FileExplorer::onRevealInExplorer() {
+    const QString path = selectedPath();
+    if (path.isEmpty()) return;
+    // /select, highlights the item itself rather than just opening its folder.
+    QProcess::startDetached(QStringLiteral("explorer.exe"),
+                            {QStringLiteral("/select,") + QDir::toNativeSeparators(path)});
+}
+
+void FileExplorer::showContextMenu(const QPoint& pos) {
+    const QModelIndex idx = tree_->indexAt(pos);
+    const bool hasSelection = idx.isValid();
+    const bool isDir = hasSelection && model_->isDir(idx);
+    const bool isRoot = hasSelection &&
+                        QFileInfo(model_->filePath(idx)) == QFileInfo(rootPath_);
+
+    if (hasSelection) tree_->setCurrentIndex(idx);
+
+    QMenu menu(this);
+    menu.setFont(Theme::sidebarFont());
+    // QMenu is a top-level window, so it inherits nothing from the main window's
+    // stylesheet and has to be dressed here.
+    menu.setStyleSheet(QString(
+        "QMenu { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: %4px; padding: 6px 0; }"
+        "QMenu::item { padding: 6px 28px 6px 14px; border-radius: 4px; margin: 1px 6px; }"
+        "QMenu::item:selected { background: rgba(255,255,255,0.06); color: %5; }"
+        "QMenu::item:disabled { color: %6; }"
+        "QMenu::separator { height: 1px; background: %3; margin: 4px 12px; }"
+    ).arg(Theme::TitlebarBg.name(),
+          Theme::TextSecondary.name(QColor::HexArgb),
+          Theme::Border.name(QColor::HexArgb),
+          QString::number(Theme::Radius),
+          Theme::TextPrimary.name(),
+          Theme::TextMuted.name(QColor::HexArgb)));
+
+    menu.addAction(tr("New File"), this, &FileExplorer::onNewFile);
+    menu.addAction(tr("New Folder"), this, &FileExplorer::onNewFolder);
+    menu.addSeparator();
+
+    // Offering actions that cannot apply to the current selection is sloppy;
+    // they are present but disabled so the menu keeps a stable shape.
+    QAction* renameAct = menu.addAction(tr("Rename"), this, &FileExplorer::onRename);
+    renameAct->setEnabled(hasSelection && !isRoot);
+    QAction* dupAct = menu.addAction(tr("Duplicate"), this, &FileExplorer::onDuplicate);
+    dupAct->setEnabled(hasSelection && !isDir);
+    QAction* delAct = menu.addAction(tr("Delete"), this, &FileExplorer::onDelete);
+    delAct->setEnabled(hasSelection && !isRoot);
+    menu.addSeparator();
+
+    QAction* copyAct = menu.addAction(tr("Copy Path"), this, &FileExplorer::onCopyPath);
+    copyAct->setEnabled(hasSelection);
+    QAction* revealAct = menu.addAction(tr("Reveal in File Explorer"), this,
+                                        &FileExplorer::onRevealInExplorer);
+    revealAct->setEnabled(hasSelection);
+
+    menu.exec(tree_->viewport()->mapToGlobal(pos));
+}
+
+bool FileExplorer::eventFilter(QObject* obj, QEvent* e) {
+    if (obj == tree_ && e->type() == QEvent::KeyPress) {
+        auto* ke = static_cast<QKeyEvent*>(e);
+        // Only when the tree itself has focus — never while the inline rename
+        // editor is open, where Delete means "delete a character".
+        if (ke->key() == Qt::Key_Delete && !tree_->isPersistentEditorOpen(tree_->currentIndex())) {
+            onDelete();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, e);
 }

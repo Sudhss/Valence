@@ -22,12 +22,19 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
     langLabel_ = makeLabel("C++");
     encLabel_ = makeLabel("UTF-8");
     posLabel_ = makeLabel("Ln 1, Col 1", Qt::AlignRight);
+    msgLabel_ = makeLabel("", Qt::AlignRight);
+    msgLabel_->setStyleSheet(QString("color: %1; padding: 0 8px;").arg(Theme::Accent.name()));
 
     layout->addWidget(fileLabel_);
     layout->addWidget(langLabel_);
     layout->addStretch();
+    layout->addWidget(msgLabel_);
     layout->addWidget(encLabel_);
     layout->addWidget(posLabel_);
+
+    msgTimer_ = new QTimer(this);
+    msgTimer_->setSingleShot(true);
+    connect(msgTimer_, &QTimer::timeout, this, [this]() { msgLabel_->clear(); });
 
     setStyleSheet(QString(
         "background: %1; border-top: 1px solid %2;"
@@ -40,6 +47,12 @@ void StatusBar::setFileName(const QString& name) {
 
 void StatusBar::setCursorPosition(int row, int col) {
     posLabel_->setText(QString("Ln %1, Col %2").arg(row + 1).arg(col + 1));
+}
+
+void StatusBar::setMessage(const QString& text) {
+    msgLabel_->setText(text);
+    // Long enough to read, short enough not to linger as stale state.
+    if (text.isEmpty()) msgTimer_->stop(); else msgTimer_->start(6000);
 }
 
 void StatusBar::setLanguage(const QString& lang) {
