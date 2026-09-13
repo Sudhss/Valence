@@ -14,8 +14,7 @@ static QString dialogStyle() {
         "}"
         "QMessageBox QLabel, QInputDialog QLabel, QDialog QLabel {"
         "  color: %2;"
-        "  font-family: 'JetBrains Mono', 'Consolas', monospace;"
-        "  font-size: 12px;"
+        "  font-size: 13px;"
         "}"
         "QDialogButtonBox QPushButton, QMessageBox QPushButton {"
         "  background: %3;"
@@ -60,7 +59,9 @@ int main(int argc, char *argv[]) {
     app.setOrganizationName("Valence");
 
     // Set default font
-    app.setFont(Theme::editorFont());
+    // The UI face, not the code face. Everything that does not explicitly ask
+    // for monospace inherits this.
+    app.setFont(Theme::uiFont());
     app.setStyleSheet(dialogStyle());
 
     MainWindow window;

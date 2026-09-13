@@ -74,9 +74,9 @@ QString editorStyle() {
 
 QLabel* fieldLabel(const QString& text) {
     auto* l = new QLabel(text);
-    QFont f = Theme::statusFont();
-    f.setPointSize(Theme::FontSizeStatus - 1);
-    l->setFont(f);
+    // Pixels, not points: the theme fonts are sized in pixels, and setting a
+    // point size here would override that and come out larger, not smaller.
+    l->setFont(Theme::uiFont(Theme::FontSizeSmall - 1));
     l->setStyleSheet(QString("color: %1; letter-spacing: 1px;")
                          .arg(Theme::TextMuted.name(QColor::HexArgb)));
     return l;
@@ -130,14 +130,15 @@ TestCaseCard::TestCaseCard(int index, QWidget* parent)
     timeLabel_->setFont(Theme::statusFont());
     timeLabel_->setStyleSheet(QString("color: %1;").arg(Theme::TextMuted.name(QColor::HexArgb)));
 
-    removeButton_ = new QPushButton(QStringLiteral("×"), header_);
+    removeButton_ = new QPushButton(Theme::Icon::Close, header_);
+    removeButton_->setFont(Theme::iconFont(10));
     removeButton_->setFixedSize(18, 18);
     removeButton_->setCursor(Qt::PointingHandCursor);
     removeButton_->setToolTip(tr("Remove this test case"));
     removeButton_->setFocusPolicy(Qt::NoFocus);
     removeButton_->setStyleSheet(QString(
         "QPushButton { background: transparent; color: %1; border: none;"
-        "  border-radius: 9px; font-size: 14px; padding-bottom: 2px; }"
+        "  border-radius: 9px; }"
         "QPushButton:hover { background: %2; color: %3; }"
     ).arg(Theme::TextMuted.name(QColor::HexArgb),
           Theme::FailureBg.name(QColor::HexArgb),

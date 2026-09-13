@@ -226,8 +226,9 @@ QWidget* FileExplorer::createToolbar() {
         "color: %1; letter-spacing: 1.2px; font-weight: 500;"
     ).arg(Theme::TextMuted.name(QColor::HexArgb)));
 
-    toolLayout->addWidget(projectLabel_);
-    toolLayout->addStretch();
+    projectLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    projectLabel_->setMinimumWidth(0);
+    toolLayout->addWidget(projectLabel_, 1);
 
     // Action buttons container
     actionButtonsContainer_ = new QWidget(this);
@@ -235,20 +236,10 @@ QWidget* FileExplorer::createToolbar() {
     actionsLayout->setContentsMargins(0, 0, 0, 0);
     actionsLayout->setSpacing(2);
 
-    auto* newFileBtn = makeToolButton(QString::fromUtf8("\xF0\x9F\x93\x84"), "New File (Ctrl+N)");
-    auto* newFolderBtn = makeToolButton(QString::fromUtf8("\xF0\x9F\x93\x81"), "New Folder");
-    auto* refreshBtn = makeToolButton(QString::fromUtf8("\xE2\x86\xBB"), "Refresh");
-    auto* collapseBtn = makeToolButton(QString::fromUtf8("\xE2\x8C\x83"), "Collapse All");
-
-    // Use simpler text that renders reliably on Windows
-    newFileBtn->setText("+");
-    newFileBtn->setToolTip("New File");
-    newFolderBtn->setText("▢");
-    newFolderBtn->setToolTip("New Folder");
-    refreshBtn->setText("↻");
-    refreshBtn->setToolTip("Refresh");
-    collapseBtn->setText("⌃");
-    collapseBtn->setToolTip("Collapse All");
+    auto* newFileBtn   = makeToolButton(Theme::Icon::Add,       tr("New File"));
+    auto* newFolderBtn = makeToolButton(Theme::Icon::NewFolder, tr("New Folder"));
+    auto* refreshBtn   = makeToolButton(Theme::Icon::Refresh,   tr("Refresh"));
+    auto* collapseBtn  = makeToolButton(Theme::Icon::Collapse,  tr("Collapse All"));
 
     actionsLayout->addWidget(newFileBtn);
     actionsLayout->addWidget(newFolderBtn);
@@ -274,23 +265,25 @@ QWidget* FileExplorer::createToolbar() {
 QPushButton* FileExplorer::makeToolButton(const QString& text, const QString& tooltip) {
     auto* btn = new QPushButton(text, this);
     btn->setToolTip(tooltip);
-    btn->setFixedSize(24, 24);
+    btn->setFont(Theme::iconFont(12));
+    btn->setFixedSize(Theme::RowHeight, Theme::RowHeight);
     btn->setCursor(Qt::PointingHandCursor);
+    btn->setFocusPolicy(Qt::NoFocus);
     btn->setStyleSheet(QString(
         "QPushButton {"
         "  background: transparent;"
         "  color: %1;"
         "  border: none;"
-        "  border-radius: 4px;"
-        "  font-size: 14px;"
+        "  border-radius: %3px;"
         "  padding: 0;"
         "}"
         "QPushButton:hover {"
-        "  background: rgba(255, 255, 255, 0.08);"
+        "  background: rgba(255, 255, 255, 0.07);"
         "  color: %2;"
         "}"
     ).arg(Theme::TextMuted.name(QColor::HexArgb),
-          Theme::TextPrimary.name()));
+          Theme::TextPrimary.name(),
+          QString::number(Theme::Radius - 2)));
     return btn;
 }
 
@@ -358,7 +351,9 @@ void FileExplorer::setRootPath(const QString& path) {
 
     // Update project label to show folder name
     QDir dir(path);
-    projectLabel_->setText(dir.dirName().toUpper());
+    projectName_ = dir.dirName().toUpper();
+    projectLabel_->setToolTip(path);
+    elideProjectLabel();
 
     stack_->setCurrentIndex(1); // Show tree
     actionButtonsContainer_->show(); // Show action buttons
@@ -598,6 +593,17 @@ void FileExplorer::showContextMenu(const QPoint& pos) {
     revealAct->setEnabled(hasSelection);
 
     menu.exec(tree_->viewport()->mapToGlobal(pos));
+}
+
+void FileExplorer::elideProjectLabel() {
+    const QFontMetrics fm(projectLabel_->font());
+    projectLabel_->setText(fm.elidedText(projectName_, Qt::ElideRight,
+                                         qMax(24, projectLabel_->width())));
+}
+
+void FileExplorer::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    if (!projectName_.isEmpty()) elideProjectLabel();
 }
 
 bool FileExplorer::eventFilter(QObject* obj, QEvent* e) {

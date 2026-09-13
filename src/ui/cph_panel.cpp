@@ -23,7 +23,8 @@ namespace {
 
 QPushButton* makeHeaderButton(const QString& glyph, const QString& tip, const QColor& tint) {
     auto* b = new QPushButton(glyph);
-    b->setFixedSize(22, 22);
+    b->setFont(Theme::iconFont(12));
+    b->setFixedSize(Theme::RowHeight, Theme::RowHeight);
     b->setCursor(Qt::PointingHandCursor);
     b->setToolTip(tip);
     b->setFocusPolicy(Qt::NoFocus);
@@ -31,7 +32,7 @@ QPushButton* makeHeaderButton(const QString& glyph, const QString& tip, const QC
     hover.setAlpha(28);
     b->setStyleSheet(QString(
         "QPushButton { background: transparent; color: %1; border: none;"
-        "  border-radius: %2px; font-size: 12px; }"
+        "  border-radius: %2px; }"
         "QPushButton:hover { background: %3; color: %4; }"
         "QPushButton:disabled { color: %5; }"
     ).arg(Theme::TextSecondary.name(QColor::HexArgb),
@@ -102,7 +103,7 @@ CphPanel::CphPanel(QWidget* parent) : QWidget(parent), d(new Impl) {
     hl->setSpacing(Theme::SpaceS);
 
     auto* title = new QLabel(tr("TESTS"), header);
-    title->setFont(Theme::statusFont());
+    title->setFont(Theme::uiFont(Theme::FontSizeSmall));
     title->setStyleSheet(QString("color: %1; letter-spacing: 1px;")
                              .arg(Theme::TextPrimary.name()));
 
@@ -110,9 +111,9 @@ CphPanel::CphPanel(QWidget* parent) : QWidget(parent), d(new Impl) {
     d->summary->setFont(Theme::statusFont());
     d->summary->setAlignment(Qt::AlignCenter);
 
-    d->addButton  = makeHeaderButton(QStringLiteral("+"), tr("Add a test case"), Theme::AccentBlue);
-    d->runButton  = makeHeaderButton(QStringLiteral("▶"), tr("Run all tests  (Ctrl+Enter)"), Theme::Accent);
-    d->stopButton = makeHeaderButton(QStringLiteral("■"), tr("Stop"), Theme::Failure);
+    d->addButton  = makeHeaderButton(Theme::Icon::Add,  tr("Add a test case"), Theme::AccentBlue);
+    d->runButton  = makeHeaderButton(Theme::Icon::Play, tr("Run all tests  (Ctrl+Enter)"), Theme::Accent);
+    d->stopButton = makeHeaderButton(Theme::Icon::Stop, tr("Stop"), Theme::Failure);
     d->stopButton->setVisible(false);
 
     hl->addWidget(title);

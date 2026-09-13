@@ -26,7 +26,7 @@ EditorWidget::EditorWidget(QWidget* parent) : QWidget(parent) {
         fm.horizontalAdvance(QStringLiteral("iiiiiiiiii")) == 10 * charWidth_;
 
     scrollY_ = 0;
-    gutterPadding_ = 20;
+    gutterPadding_ = 14;
     updateGutterWidth();
 
     modified_ = false;
@@ -1061,22 +1061,12 @@ void EditorWidget::paintEvent(QPaintEvent* event) {
 }
 
 void EditorWidget::paintGutter(QPainter& p, int startRow, int endRow) {
-    // Gutter background
-    p.fillRect(0, 0, gutterWidth_, height(), Theme::SidebarBg);
-    p.setPen(Theme::Border);
-
-    // Gutter border
-    p.setPen(Theme::Border);
-    p.drawLine(gutterWidth_ - 1, 0, gutterWidth_ - 1, height());
-
+    // The gutter shares the editor's surface — no band, no rule.
+    p.fillRect(0, 0, gutterWidth_, height(), Theme::EditorBg);
     p.setFont(font_);
     for (int row = startRow; row < endRow; row++) {
         int y = yFromRow(row);
-        if (row == cursor_.row) {
-            p.setPen(Theme::TextPrimary);
-        } else {
-            p.setPen(Theme::TextMuted);
-        }
+        p.setPen(row == cursor_.row ? Theme::TextSecondary : Theme::TextMuted);
         QString num = QString::number(row + 1);
         int x = gutterWidth_ - gutterPadding_ - p.fontMetrics().horizontalAdvance(num);
         p.drawText(x, y + ascent_, num);

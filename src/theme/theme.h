@@ -2,6 +2,7 @@
 #include <QColor>
 #include <QFont>
 #include <QString>
+#include <QStringList>
 
 namespace Theme {
     // ── Background Hierarchy (softer, warmer darks — Apple-inspired) ──
@@ -27,11 +28,11 @@ namespace Theme {
     inline const QColor SynKeyword(86, 209, 255);          // #56d1ff — vivid sky blue
     inline const QColor SynType(130, 170, 255);            // #82aaff — periwinkle
     inline const QColor SynString(195, 232, 141);          // #c3e88d — lime green
-    inline const QColor SynComment(225, 228, 232, 60);     // very dim — fades out
+    inline const QColor SynComment(225, 228, 232, 96);     // recedes, but stays readable
     inline const QColor SynNumber(255, 183, 77);           // #ffb74d — warm orange
     inline const QColor SynPreprocessor(199, 146, 234);    // #c792ea — purple
     inline const QColor SynFunction(130, 231, 135);        // #82e787 — bright green
-    inline const QColor SynPunctuation(225, 228, 232, 140); // 55% — more visible
+    inline const QColor SynPunctuation(225, 228, 232, 165); // brackets should not disappear
 
     // ── Verdict / Judge states (CPH panel, diagnostics) ──
     // Desaturated on purpose: these sit next to code all day and must not shout.
@@ -45,8 +46,8 @@ namespace Theme {
     inline const QColor PendingBg(255, 255, 255, 10);
 
     // ── UI ──
-    inline const QColor CurrentLine(255, 255, 255, 6);    // even more subtle
-    inline const QColor SelectionBg(0, 255, 156, 25);     // softer selection
+    inline const QColor CurrentLine(255, 255, 255, 11);   // present, still quiet
+    inline const QColor SelectionBg(0, 255, 156, 34);     // softer selection
     inline const QColor Border(255, 255, 255, 10);        // very subtle borders
     inline const QColor BorderMedium(255, 255, 255, 18);
     inline const QColor ScrollThumb(255, 255, 255, 15);
@@ -62,37 +63,105 @@ namespace Theme {
     inline const int RowHeight = 26;                       // tool buttons, list rows
     inline const int HeaderHeight = 32;                    // panel headers
 
-    // ── Font Config ──
-    inline const int FontSizeEditor = 13;
-    inline const int FontSizeSidebar = 12;
-    inline const int FontSizeTerminal = 12;
-    inline const int FontSizeStatus = 11;
+    // ── Type ───────────────────────────────────────────────────────────────
+    //
+    // Two typefaces, used for two different jobs. Mixing them up is the single
+    // most common reason a desktop app looks homemade: monospace is for code
+    // and terminal output, and for nothing else. Menus, tabs, labels, buttons
+    // and the status bar all belong to the platform's UI face.
+    //
+    // Families are given as an ordered fallback list rather than one name.
+    // Asking for a font that is not installed does not fail loudly — Qt
+    // silently substitutes whatever it likes, which is how every glyph in this
+    // app ended up in a generic fallback face.
 
-    inline QFont editorFont() {
-        QFont f("JetBrains Mono", FontSizeEditor);
+    inline QStringList codeFamilies() {
+        return {
+            QStringLiteral("JetBrains Mono"),   // if the user installs it, it wins
+            QStringLiteral("Cascadia Code"),    // ships with Windows Terminal / VS
+            QStringLiteral("Cascadia Mono"),
+            QStringLiteral("Consolas"),         // always present on Windows
+            QStringLiteral("DejaVu Sans Mono"),
+            QStringLiteral("monospace"),
+        };
+    }
+
+    inline QStringList uiFamilies() {
+        return {
+            QStringLiteral("Segoe UI Variable Text"),   // Windows 11
+            QStringLiteral("Segoe UI"),                 // Windows 10
+            QStringLiteral("Inter"),
+            QStringLiteral("system-ui"),
+            QStringLiteral("sans-serif"),
+        };
+    }
+
+    // Sizes are in logical pixels, not points. Points made the editor render
+    // around 17px on a 96dpi display, which is why everything felt oversized;
+    // pixels say what is meant and still scale with the device pixel ratio.
+    inline const int FontSizeEditor   = 14;
+    inline const int FontSizeTerminal = 13;
+    inline const int FontSizeUI       = 13;
+    inline const int FontSizeSmall    = 12;
+
+    inline QFont codeFont(int pixelSize = FontSizeEditor) {
+        QFont f;
+        f.setFamilies(codeFamilies());
         f.setStyleHint(QFont::Monospace);
         f.setFixedPitch(true);
+        f.setPixelSize(pixelSize);
         return f;
     }
 
-    inline QFont sidebarFont() {
-        QFont f("JetBrains Mono", FontSizeSidebar);
-        f.setStyleHint(QFont::Monospace);
-        f.setFixedPitch(true);
+    inline QFont uiFont(int pixelSize = FontSizeUI) {
+        QFont f;
+        f.setFamilies(uiFamilies());
+        f.setStyleHint(QFont::SansSerif);
+        f.setPixelSize(pixelSize);
         return f;
     }
 
-    inline QFont terminalFont() {
-        QFont f("JetBrains Mono", FontSizeTerminal);
-        f.setStyleHint(QFont::Monospace);
-        f.setFixedPitch(true);
+    // A CSS family list for the stylesheets that cannot take a QFont.
+    inline QString codeFamilyCss() {
+        return QStringLiteral("'JetBrains Mono','Cascadia Code','Cascadia Mono','Consolas',monospace");
+    }
+    inline QString uiFamilyCss() {
+        return QStringLiteral("'Segoe UI Variable Text','Segoe UI','Inter',system-ui,sans-serif");
+    }
+
+    // ── Icons ──
+    //
+    // Windows ships a real icon font. Using it beats scattering Unicode glyphs
+    // like ▢ and ⌃ through the UI, which land in whatever fallback face happens
+    // to carry them and end up at different weights and baselines from each
+    // other — one of the clearest signs of an improvised interface.
+    inline QFont iconFont(int pixelSize = 12) {
+        QFont f;
+        f.setFamilies({QStringLiteral("Segoe Fluent Icons"),    // Windows 11
+                       QStringLiteral("Segoe MDL2 Assets")});   // Windows 10
+        f.setPixelSize(pixelSize);
         return f;
     }
 
-    inline QFont statusFont() {
-        QFont f("JetBrains Mono", FontSizeStatus);
-        f.setStyleHint(QFont::Monospace);
-        f.setFixedPitch(true);
-        return f;
+    namespace Icon {
+        inline QString glyph(char16_t c) { return QString(QChar(c)); }
+        inline const QString Add       = glyph(0xE710);
+        inline const QString NewFolder = glyph(0xE8F4);
+        inline const QString Refresh   = glyph(0xE72C);
+        inline const QString Collapse  = glyph(0xE70E);   // chevron up
+        inline const QString Close     = glyph(0xE711);
+        inline const QString Play      = glyph(0xE768);
+        inline const QString Stop      = glyph(0xE71A);
+        inline const QString Delete    = glyph(0xE74D);   // waste basket
+        inline const QString Clear     = glyph(0xE894);
+        inline const QString Folder    = glyph(0xE8B7);
     }
+
+    // ── Named roles ──
+    // Call sites ask for the role, not the face, so the mapping above is the
+    // only place that ever has to change.
+    inline QFont editorFont()   { return codeFont(FontSizeEditor); }     // the code surface
+    inline QFont terminalFont() { return codeFont(FontSizeTerminal); }   // shell + test I/O
+    inline QFont sidebarFont()  { return uiFont(FontSizeUI); }           // explorer, tabs
+    inline QFont statusFont()   { return uiFont(FontSizeSmall); }        // status bar, headers
 }

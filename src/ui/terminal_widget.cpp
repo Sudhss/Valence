@@ -35,14 +35,15 @@ TerminalWidget::TerminalWidget(QWidget* parent) : QWidget(parent) {
     statusLabel_->setFont(Theme::statusFont());
     statusLabel_->setStyleSheet(QString("color: %1;").arg(Theme::TextMuted.name(QColor::HexArgb)));
 
-    auto* clearButton = new QPushButton(QStringLiteral("⌫"), headerWidget);
-    clearButton->setFixedSize(22, 22);
+    auto* clearButton = new QPushButton(Theme::Icon::Clear, headerWidget);
+    clearButton->setFont(Theme::iconFont(12));
+    clearButton->setFixedSize(Theme::RowHeight, Theme::RowHeight);
     clearButton->setCursor(Qt::PointingHandCursor);
     clearButton->setToolTip(tr("Clear  (Ctrl+L)"));
     clearButton->setFocusPolicy(Qt::NoFocus);
     clearButton->setStyleSheet(QString(
         "QPushButton { background: transparent; color: %1; border: none;"
-        "  border-radius: %2px; font-size: 12px; }"
+        "  border-radius: %2px; }"
         "QPushButton:hover { background: rgba(255,255,255,0.07); color: %3; }"
     ).arg(Theme::TextMuted.name(QColor::HexArgb),
           QString::number(Theme::Radius - 2),

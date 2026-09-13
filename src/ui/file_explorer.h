@@ -16,6 +16,7 @@ public:
 
 protected:
     bool eventFilter(QObject* obj, QEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
 
 signals:
     void fileDoubleClicked(const QString& filePath);
@@ -47,9 +48,11 @@ private:
     QLabel* projectLabel_;
     QWidget* actionButtonsContainer_;
     QString rootPath_;
+    QString projectName_;
     QString pendingOpenAfterRename_;
 
     void applyStyle();
+    void elideProjectLabel();
     QString currentDirectory() const;
     QString selectedPath() const;
     QWidget* createToolbar();
